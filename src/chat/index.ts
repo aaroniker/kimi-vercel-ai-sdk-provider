@@ -16,6 +16,7 @@ export type {
 } from './kimi-chat-response';
 // Settings and configuration
 export type {
+  KimiCachingConfig,
   KimiChatConfig,
   KimiChatModelId,
   KimiChatSettings,
@@ -36,5 +37,6 @@ export {
 } from './kimi-chat-response';
 export {
   inferModelCapabilities,
+  kimiCachingConfigSchema,
   kimiProviderOptionsSchema
 } from './kimi-chat-settings';

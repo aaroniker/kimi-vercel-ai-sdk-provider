@@ -382,7 +382,7 @@ describe('prepareKimiTools', () => {
       expect(result.toolChoice).toBe('none');
     });
 
-    it('should warn and fallback to auto for required tool choice', () => {
+    it('should warn and fallback to auto for required tool choice with polyfill', () => {
       const result = prepareKimiTools({
         tools: basicTools,
         toolChoice: { type: 'required' }
@@ -391,11 +391,28 @@ describe('prepareKimiTools', () => {
       expect(result.toolWarnings).toContainEqual({
         type: 'compatibility',
         feature: 'toolChoice.required',
-        details: 'Moonshot does not support required tool choice. Falling back to auto.'
+        details: 'Using tool choice polyfill with system message injection.'
       });
+      expect(result.toolChoiceSystemMessage).toBeDefined();
+      expect(result.toolChoiceSystemMessage).toContain('MUST use one of the available tools');
     });
 
-    it('should warn and fallback to auto for specific tool choice', () => {
+    it('should warn and fallback to auto for required tool choice without polyfill', () => {
+      const result = prepareKimiTools({
+        tools: basicTools,
+        toolChoice: { type: 'required' },
+        toolChoicePolyfill: false
+      });
+      expect(result.toolChoice).toBe('auto');
+      expect(result.toolWarnings).toContainEqual({
+        type: 'compatibility',
+        feature: 'toolChoice.required',
+        details: 'Moonshot does not support required tool choice. Falling back to auto.'
+      });
+      expect(result.toolChoiceSystemMessage).toBeUndefined();
+    });
+
+    it('should warn and fallback to auto for specific tool choice with polyfill', () => {
       const result = prepareKimiTools({
         tools: basicTools,
         toolChoice: { type: 'tool', toolName: 'test' }
@@ -404,8 +421,25 @@ describe('prepareKimiTools', () => {
       expect(result.toolWarnings).toContainEqual({
         type: 'compatibility',
         feature: 'toolChoice.tool:test',
+        details: 'Using tool choice polyfill with system message injection.'
+      });
+      expect(result.toolChoiceSystemMessage).toBeDefined();
+      expect(result.toolChoiceSystemMessage).toContain('MUST use the "test" tool');
+    });
+
+    it('should warn and fallback to auto for specific tool choice without polyfill', () => {
+      const result = prepareKimiTools({
+        tools: basicTools,
+        toolChoice: { type: 'tool', toolName: 'test' },
+        toolChoicePolyfill: false
+      });
+      expect(result.toolChoice).toBe('auto');
+      expect(result.toolWarnings).toContainEqual({
+        type: 'compatibility',
+        feature: 'toolChoice.tool:test',
         details: 'Moonshot does not support forcing a specific tool. Falling back to auto.'
       });
+      expect(result.toolChoiceSystemMessage).toBeUndefined();
     });
   });
 

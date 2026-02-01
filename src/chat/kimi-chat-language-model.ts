@@ -41,6 +41,7 @@ import {
   mapKimiFinishReason
 } from './kimi-chat-response';
 import {
+  type KimiCachingConfig,
   type KimiChatConfig,
   type KimiChatModelId,
   type KimiChatSettings,
@@ -168,16 +169,27 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
     // Resolve code interpreter configuration from settings and provider options
     const codeInterpreter = resolveBuiltinToolConfig(this.settings.codeInterpreter, options.codeInterpreter);
 
+    // Resolve tool choice polyfill setting
+    const toolChoicePolyfill = options.toolChoicePolyfill ?? this.settings.toolChoicePolyfill ?? true;
+
     const {
       tools: kimiTools,
       toolChoice: kimiToolChoice,
-      toolWarnings
+      toolWarnings,
+      toolChoiceSystemMessage
     } = prepareKimiTools({
       tools,
       toolChoice,
       webSearch,
-      codeInterpreter
+      codeInterpreter,
+      toolChoicePolyfill
     });
+
+    // Resolve caching configuration
+    const caching = resolveCachingConfig(this.settings.caching, options.caching);
+
+    // Build caching headers
+    const cachingHeaders = buildCachingHeaders(caching);
 
     const passthroughOptions = getPassthroughOptions({
       providerOptions,
@@ -186,9 +198,16 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
       knownKeys: Object.keys(kimiProviderOptionsSchema.shape)
     });
 
+    // Convert messages and optionally inject tool choice system message
+    const messages = convertToKimiChatMessages(prompt);
+    if (toolChoiceSystemMessage) {
+      // Prepend the tool choice instruction as a system message
+      messages.unshift({ role: 'system', content: toolChoiceSystemMessage });
+    }
+
     const body = removeUndefinedEntries({
       model: this.modelId,
-      messages: convertToKimiChatMessages(prompt),
+      messages,
       max_tokens: maxOutputTokens,
       temperature,
       top_p: topP,
@@ -221,7 +240,8 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
 
     const requestHeaders: Record<string, string | undefined> = {
       ...(options.requestId ? { 'X-Request-ID': options.requestId } : {}),
-      ...(options.extraHeaders ?? {})
+      ...(options.extraHeaders ?? {}),
+      ...cachingHeaders
     };
 
     return {
@@ -670,6 +690,57 @@ function resolveBuiltinToolConfig<T extends BuiltinToolOptions>(
   }
 
   return undefined;
+}
+
+type CachingOptions = boolean | KimiCachingConfig | undefined;
+
+/**
+ * Resolve caching configuration from settings and provider options.
+ */
+function resolveCachingConfig(
+  settingsConfig: CachingOptions,
+  optionsConfig: CachingOptions
+): KimiCachingConfig | undefined {
+  // Provider options take precedence
+  const config = optionsConfig ?? settingsConfig;
+
+  if (config == null) {
+    return undefined;
+  }
+
+  if (typeof config === 'boolean') {
+    return config ? { enabled: true } : undefined;
+  }
+
+  return config.enabled ? config : undefined;
+}
+
+/**
+ * Build HTTP headers for context caching.
+ * Kimi uses specific headers to control caching behavior.
+ */
+function buildCachingHeaders(caching: KimiCachingConfig | undefined): Record<string, string> {
+  if (!caching?.enabled) {
+    return {};
+  }
+
+  const headers: Record<string, string> = {
+    'X-Kimi-Cache': 'enabled'
+  };
+
+  if (caching.cacheKey) {
+    headers['X-Kimi-Cache-Key'] = caching.cacheKey;
+  }
+
+  if (caching.ttlSeconds) {
+    headers['X-Kimi-Cache-TTL'] = String(caching.ttlSeconds);
+  }
+
+  if (caching.resetCache) {
+    headers['X-Kimi-Cache-Reset'] = 'true';
+  }
+
+  return headers;
 }
 
 // ============================================================================

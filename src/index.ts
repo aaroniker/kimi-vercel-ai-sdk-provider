@@ -46,6 +46,7 @@ export {
 // ============================================================================
 
 export type {
+  KimiCachingConfig,
   KimiChatModelId,
   KimiChatSettings,
   KimiExtendedUsage,
@@ -55,8 +56,34 @@ export type {
 export {
   KimiChatLanguageModel,
   inferModelCapabilities,
+  kimiCachingConfigSchema,
   kimiProviderOptionsSchema
 } from './chat';
+
+// ============================================================================
+// File Handling
+// ============================================================================
+
+export type {
+  Attachment,
+  FileUploadOptions,
+  FileUploadResult,
+  KimiFile,
+  KimiFileClientConfig,
+  ProcessedAttachment
+} from './files';
+export {
+  KimiFileClient,
+  SUPPORTED_FILE_EXTENSIONS,
+  SUPPORTED_MIME_TYPES,
+  getMediaTypeFromExtension,
+  getPurposeFromMediaType,
+  isDocumentMediaType,
+  isFileExtractMediaType,
+  isImageMediaType,
+  isVideoMediaType,
+  processAttachments
+} from './files';
 
 // ============================================================================
 // Built-in Tools

@@ -15,6 +15,9 @@ This is a native implementation with full support for Kimi-specific features, no
 - Token tracking (cache hits, reasoning, web search, code interpreter)
 - Regional endpoints (global and China)
 - Provider tool helpers (`kimi.tools.*` and `kimiTools.*`)
+- **Native File & PDF Support** - Automatic file upload and content extraction
+- **Tool Choice Polyfill** - Simulates `required` and `tool` choices via system messages
+- **Context Caching** - Reduce costs by up to 90% for repeated long prompts
 
 ### Kimi Code (Premium Coding API)
 - High-speed output (up to 100 tokens/s)
@@ -275,6 +278,188 @@ const result = await generateText({
 });
 ```
 
+## Native File & PDF Support
+
+Kimi excels at reading long documents. This provider includes a file handling module for automatic file upload and content extraction.
+
+### File Client (Simple)
+
+The provider includes a pre-configured file client:
+
+```ts
+import { createKimi } from 'ai-sdk-provider-kimi';
+
+const kimi = createKimi();
+
+// Upload and extract content from a PDF - no config needed!
+const result = await kimi.files.uploadAndExtract({
+  data: pdfBuffer,
+  filename: 'document.pdf',
+});
+
+console.log(result.content); // Extracted text content
+console.log(result.file.id); // File ID for reference
+
+// List all uploaded files
+const files = await kimi.files.listFiles();
+
+// Delete a file
+await kimi.files.deleteFile(fileId);
+```
+
+### File Client (Manual Configuration)
+
+If you need custom configuration:
+
+```ts
+import { KimiFileClient } from 'ai-sdk-provider-kimi';
+
+const client = new KimiFileClient({
+  baseURL: 'https://api.moonshot.ai/v1',
+  headers: () => ({
+    Authorization: `Bearer ${process.env.MOONSHOT_API_KEY}`,
+  }),
+});
+
+const result = await client.uploadAndExtract({
+  data: pdfBuffer,
+  filename: 'document.pdf',
+  mediaType: 'application/pdf',
+});
+```
+
+### Attachment Processing
+
+Process experimental_attachments automatically:
+
+```ts
+import { createKimi, processAttachments } from 'ai-sdk-provider-kimi';
+
+const kimi = createKimi();
+
+// Use the provider's file client config
+const processed = await processAttachments({
+  attachments: message.experimental_attachments ?? [],
+  clientConfig: {
+    baseURL: 'https://api.moonshot.ai/v1',
+    headers: () => ({ Authorization: `Bearer ${process.env.MOONSHOT_API_KEY}` }),
+  },
+  autoUploadDocuments: true,
+  cleanupAfterExtract: true, // Delete files after extraction
+});
+
+// Inject document content into messages
+const documentContent = processed
+  .filter(p => p.type === 'text-inject' && p.textContent)
+  .map(p => p.textContent)
+  .join('\n');
+```
+
+### Supported File Types
+
+Documents (extracted as text): PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, MD, HTML, JSON, EPUB, CSV, and code files.
+
+Images (for vision): JPEG, PNG, GIF, WebP, SVG, BMP, TIFF, AVIF.
+
+Videos (K2.5 models): MP4, WebM, OGG.
+
+## Tool Choice Polyfill
+
+Kimi doesn't natively support `tool_choice: 'required'` or forcing a specific tool. This provider includes a polyfill that uses system message injection to simulate these behaviors.
+
+### Automatic Polyfill (Default)
+
+```ts
+const result = await generateText({
+  model: kimi('kimi-k2.5'),
+  tools: { searchWeb: webSearchTool },
+  toolChoice: { type: 'required' }, // Polyfilled automatically
+  prompt: 'Find the weather in Tokyo',
+});
+```
+
+The provider will inject a system message like:
+> "IMPORTANT INSTRUCTION: You MUST use one of the available tools to respond..."
+
+### Disable Polyfill
+
+```ts
+// Disable via model settings
+const model = kimi('kimi-k2.5', { toolChoicePolyfill: false });
+
+// Or per-request via provider options
+const result = await generateText({
+  model: kimi('kimi-k2.5'),
+  tools: { searchWeb: webSearchTool },
+  toolChoice: { type: 'required' },
+  providerOptions: {
+    kimi: { toolChoicePolyfill: false }
+  },
+  prompt: 'Find the weather',
+});
+```
+
+## Context Caching
+
+Reduce costs by up to 90% for repeated long prompts (like analyzing documents or maintaining long conversations).
+
+### Enable Caching
+
+```ts
+// Simple boolean
+const result = await generateText({
+  model: kimi('kimi-k2.5', { caching: true }),
+  prompt: 'Analyze this long document...',
+});
+
+// With configuration
+const result = await generateText({
+  model: kimi('kimi-k2.5', {
+    caching: {
+      enabled: true,
+      cacheKey: 'book-analysis-v1', // Consistent key for cache hits
+      ttlSeconds: 7200, // 2 hours TTL
+    }
+  }),
+  prompt: 'What are the main themes?',
+});
+```
+
+### Per-Request Caching
+
+```ts
+const result = await generateText({
+  model: kimi('kimi-k2.5'),
+  prompt: 'Continue analysis...',
+  providerOptions: {
+    kimi: {
+      caching: {
+        enabled: true,
+        cacheKey: 'book-analysis-v1',
+      }
+    }
+  },
+});
+```
+
+### Reset Cache
+
+```ts
+const result = await generateText({
+  model: kimi('kimi-k2.5'),
+  prompt: 'Re-analyze with new context...',
+  providerOptions: {
+    kimi: {
+      caching: {
+        enabled: true,
+        cacheKey: 'book-analysis-v1',
+        resetCache: true, // Force cache refresh
+      }
+    }
+  },
+});
+```
+
 ## Token Tracking
 
 Token usage includes built-in tool usage when present:
@@ -518,6 +703,7 @@ import {
   KimiChatLanguageModel,
   inferModelCapabilities,
   kimiProviderOptionsSchema,
+  kimiCachingConfigSchema,
   kimiTools,
   // Types
   KimiProvider,
@@ -526,6 +712,7 @@ import {
   KimiChatModelId,
   KimiProviderOptions,
   KimiModelCapabilities,
+  KimiCachingConfig,
 } from 'ai-sdk-provider-kimi';
 
 // Kimi Code Provider
@@ -555,6 +742,27 @@ import {
   ReasoningEffort,
 } from 'ai-sdk-provider-kimi';
 
+// File Handling
+import {
+  KimiFileClient,
+  processAttachments,
+  SUPPORTED_FILE_EXTENSIONS,
+  SUPPORTED_MIME_TYPES,
+  isImageMediaType,
+  isVideoMediaType,
+  isDocumentMediaType,
+  isFileExtractMediaType,
+  getMediaTypeFromExtension,
+  getPurposeFromMediaType,
+  // Types
+  KimiFile,
+  KimiFileClientConfig,
+  FileUploadOptions,
+  FileUploadResult,
+  Attachment,
+  ProcessedAttachment,
+} from 'ai-sdk-provider-kimi';
+
 // Built-in Tools
 import {
   createWebSearchTool,
@@ -575,6 +783,19 @@ import {
   KimiModelNotFoundError,
 } from 'ai-sdk-provider-kimi';
 ```
+
+### Feature Comparison
+
+| Feature | Generic OpenAI Provider | Kimi Provider |
+|---------|------------------------|---------------|
+| Setup | Manual baseURL & Headers | Plug-and-play |
+| PDF/Doc Analysis | Not supported (only Vision) | Auto-upload & Extract |
+| Thinking Models | Mixed text / Unparsed | Mapped to SDK reasoning |
+| Tool Reliability | Crashes on `tool_choice: required` | Auto-fixed / Polyfilled |
+| Long Context | Full price | Cached (up to 90% cheaper) |
+| Web Search | Manual tool definition | `webSearch: true` toggle |
+| Code Interpreter | Not available | `codeInterpreter: true` toggle |
+| Type Safety | Raw strings | TypeScript enums for models |
 
 ## License
 

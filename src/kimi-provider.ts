@@ -12,6 +12,7 @@ import {
   withoutTrailingSlash
 } from '@ai-sdk/provider-utils';
 import { KimiChatLanguageModel, type KimiChatModelId, type KimiChatSettings } from './chat';
+import { KimiFileClient } from './files';
 import { kimiTools } from './tools';
 import { VERSION } from './version';
 
@@ -115,6 +116,22 @@ export interface KimiProvider extends Omit<ProviderV3, 'specificationVersion'> {
    * Built-in tools that can be used with Kimi models.
    */
   tools: typeof kimiTools;
+
+  /**
+   * File client for uploading and extracting content from files.
+   * Pre-configured with the provider's API key and base URL.
+   *
+   * @example
+   * ```ts
+   * const kimi = createKimi();
+   * const result = await kimi.files.uploadAndExtract({
+   *   data: pdfBuffer,
+   *   filename: 'document.pdf',
+   * });
+   * console.log(result.content);
+   * ```
+   */
+  files: KimiFileClient;
 }
 
 // ============================================================================
@@ -205,6 +222,11 @@ export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
   provider.languageModel = createChatModel;
   provider.chat = createChatModel;
   provider.tools = kimiTools;
+  provider.files = new KimiFileClient({
+    baseURL,
+    headers: getHeaders,
+    fetch: options.fetch
+  });
 
   provider.embeddingModel = (modelId: string) => {
     throw new NoSuchModelError({ modelId, modelType: 'embeddingModel' });

@@ -62,6 +62,13 @@ export interface PrepareToolsOptions {
    * Code interpreter configuration.
    */
   codeInterpreter?: boolean | KimiCodeInterpreterToolOptions;
+
+  /**
+   * Enable tool choice polyfill for unsupported modes.
+   * When true, uses system message injection to simulate
+   * `required` and `tool` choices.
+   */
+  toolChoicePolyfill?: boolean;
 }
 
 /**
@@ -82,6 +89,12 @@ export interface PrepareToolsResult {
    * Any warnings generated during tool preparation.
    */
   toolWarnings: SharedV3Warning[];
+
+  /**
+   * System message to inject for tool choice polyfill.
+   * This should be prepended to the messages array.
+   */
+  toolChoiceSystemMessage?: string;
 }
 
 // ============================================================================
@@ -94,14 +107,20 @@ export interface PrepareToolsResult {
  * This function processes user-defined tools and built-in tools,
  * converting them to the format expected by the Kimi API.
  *
+ * When `toolChoicePolyfill` is enabled, the function will generate
+ * system messages to simulate unsupported tool choice modes:
+ * - `required`: Injects a message instructing the model to use a tool
+ * - `tool`: Injects a message instructing the model to use a specific tool
+ *
  * @param options - Tool preparation options
- * @returns Prepared tools, tool choice, and warnings
+ * @returns Prepared tools, tool choice, warnings, and optional system message
  */
 export function prepareKimiTools({
   tools,
   toolChoice,
   webSearch,
-  codeInterpreter
+  codeInterpreter,
+  toolChoicePolyfill = true
 }: PrepareToolsOptions): PrepareToolsResult {
   tools = tools?.length ? tools : undefined;
 
@@ -164,20 +183,62 @@ export function prepareKimiTools({
     case 'auto':
     case 'none':
       return { tools: kimiTools, toolChoice: toolChoice.type, toolWarnings };
-    case 'required':
+
+    case 'required': {
+      if (toolChoicePolyfill) {
+        // Generate system message to force tool usage
+        const toolNames = kimiTools.map((t) => (t.type === 'function' ? t.function.name : t.function.name)).join(', ');
+        const systemMessage = generateRequiredToolMessage(toolNames);
+
+        toolWarnings.push({
+          type: 'compatibility',
+          feature: 'toolChoice.required',
+          details: 'Using tool choice polyfill with system message injection.'
+        });
+
+        return {
+          tools: kimiTools,
+          toolChoice: 'auto',
+          toolWarnings,
+          toolChoiceSystemMessage: systemMessage
+        };
+      }
+
       toolWarnings.push({
         type: 'compatibility',
         feature: 'toolChoice.required',
         details: 'Moonshot does not support required tool choice. Falling back to auto.'
       });
       return { tools: kimiTools, toolChoice: 'auto', toolWarnings };
-    case 'tool':
+    }
+
+    case 'tool': {
+      if (toolChoicePolyfill) {
+        // Generate system message to force specific tool
+        const systemMessage = generateSpecificToolMessage(toolChoice.toolName);
+
+        toolWarnings.push({
+          type: 'compatibility',
+          feature: `toolChoice.tool:${toolChoice.toolName}`,
+          details: 'Using tool choice polyfill with system message injection.'
+        });
+
+        return {
+          tools: kimiTools,
+          toolChoice: 'auto',
+          toolWarnings,
+          toolChoiceSystemMessage: systemMessage
+        };
+      }
+
       toolWarnings.push({
         type: 'compatibility',
         feature: `toolChoice.tool:${toolChoice.toolName}`,
         details: 'Moonshot does not support forcing a specific tool. Falling back to auto.'
       });
       return { tools: kimiTools, toolChoice: 'auto', toolWarnings };
+    }
+
     default: {
       const _exhaustiveCheck: never = toolChoice;
       throw new UnsupportedFunctionalityError({
@@ -185,6 +246,24 @@ export function prepareKimiTools({
       });
     }
   }
+}
+
+// ============================================================================
+// Tool Choice Polyfill Messages
+// ============================================================================
+
+/**
+ * Generate a system message to force the model to use a tool.
+ */
+function generateRequiredToolMessage(toolNames: string): string {
+  return `IMPORTANT INSTRUCTION: You MUST use one of the available tools (${toolNames}) to respond to the user's request. Do NOT provide a direct text response without first calling a tool. Always invoke a tool to complete this task.`;
+}
+
+/**
+ * Generate a system message to force the model to use a specific tool.
+ */
+function generateSpecificToolMessage(toolName: string): string {
+  return `IMPORTANT INSTRUCTION: You MUST use the "${toolName}" tool to respond to this request. Do NOT use any other tool or provide a direct text response. Call the "${toolName}" tool with appropriate parameters.`;
 }
 
 // ============================================================================
