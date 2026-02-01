@@ -1,0 +1,122 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 120
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "recommended": true,
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "identifierOrder": "lexicographic",
+            "groups": [
+              [
+                {
+                  "type": true
+                }
+              ],
+              [
+                {
+                  "type": false,
+                  "source": [":NODE:", ":PACKAGE:", ":PACKAGE_WITH_PROTOCOL:"]
+                }
+              ],
+              [
+                {
+                  "type": false,
+                  "source": [":ALIAS:", ":URL:"]
+                }
+              ],
+              [
+                {
+                  "type": false,
+                  "source": ":PATH:"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noUselessThisAlias": "error",
+        "noUselessTypeConstraint": "error",
+        "useArrowFunction": "error"
+      },
+      "correctness": {
+        "noUnusedVariables": {
+          "level": "warn",
+          "options": {
+            "ignoreRestSiblings": true
+          }
+        },
+        "useExhaustiveDependencies": "off",
+        "useHookAtTopLevel": "warn"
+      },
+      "a11y": {
+        "useKeyWithClickEvents": "off"
+      },
+      "style": {
+        "useBlockStatements": "error",
+        "useConsistentCurlyBraces": "warn",
+        "noNamespace": "warn",
+        "noNonNullAssertion": "off",
+        "useAsConstAssertion": "error"
+      },
+      "nursery": {
+        "useConsistentArrowReturn": {
+          "level": "warn",
+          "options": {
+            "style": "asNeeded",
+            "requireForObjectLiteral": true
+          }
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": {
+          "level": "warn",
+          "options": {}
+        },
+        "noExtraNonNullAssertion": "error",
+        "noMisleadingInstantiator": "error",
+        "noUnsafeDeclarationMerging": "error",
+        "useNamespaceKeyword": "error"
+      }
+    }
+  },
+  "javascript": {
+    "jsxRuntime": "reactClassic",
+    "formatter": {
+      "arrowParentheses": "always",
+      "operatorLinebreak": "after",
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "single",
+      "trailingCommas": "none"
+    }
+  },
+  "files": {
+    "includes": [
+      "packages/**/src/**",
+      "apps/**/src/**",
+      "packages/**/src/*",
+      "apps/**/src/*",
+      "!node_modules",
+      "!build",
+      "!coverage",
+      "!dist",
+      "!styled-system"
+    ]
+  }
+}
