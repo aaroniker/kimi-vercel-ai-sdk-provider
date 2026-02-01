@@ -1,13 +1,20 @@
-# ai-sdk-provider-kimi
+# kimi-vercel-ai-sdk-provider
 
 Native Kimi (Moonshot AI) provider for Vercel AI SDK.
 
 This is a native implementation with full support for Kimi-specific features, not a generic OpenAI-compatible wrapper.
 
-[![npm version](https://img.shields.io/npm/v/ai-sdk-provider-kimi.svg?style=flat-square)](https://www.npmjs.com/package/ai-sdk-provider-kimi) 
-[![npm bundle size](https://img.shields.io/bundlephobia/minzip/ai-sdk-provider-kimi?style=flat-square&label=bundle%20size)](https://bundlephobia.com/package/ai-sdk-provider-kimi)
-[![npm downloads](https://img.shields.io/npm/dm/ai-sdk-provider-kimi.svg?style=flat-square)](https://www.npmjs.com/package/ai-sdk-provider-kimi)
-[![license](https://img.shields.io/npm/l/ai-sdk-provider-kimi.svg?style=flat-square)](https://github.com/aaroniker/ai-sdk-provider-kimi/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/kimi-vercel-ai-sdk-provider
+.svg?style=flat-square)](https://www.npmjs.com/package/kimi-vercel-ai-sdk-provider
+) 
+[![npm bundle size](https://img.shields.io/bundlephobia/minzip/kimi-vercel-ai-sdk-provider
+?style=flat-square&label=bundle%20size)](https://bundlephobia.com/package/kimi-vercel-ai-sdk-provider
+)
+[![npm downloads](https://img.shields.io/npm/dm/kimi-vercel-ai-sdk-provider
+.svg?style=flat-square)](https://www.npmjs.com/package/kimi-vercel-ai-sdk-provider
+)
+[![license](https://img.shields.io/npm/l/kimi-vercel-ai-sdk-provider
+.svg?style=flat-square)](https://github.com/aaroniker/kimi-vercel-ai-sdk-provider/blob/main/LICENSE)
 
 ## Table of Contents
 
@@ -64,7 +71,7 @@ This is a native implementation with full support for Kimi-specific features, no
 ## Install
 
 ```bash
-npm install ai-sdk-provider-kimi
+npm install kimi-vercel-ai-sdk-provider
 ```
 
 ## Quick Start
@@ -72,7 +79,8 @@ npm install ai-sdk-provider-kimi
 ### Kimi Chat (Standard)
 
 ```ts
-import { createKimi } from 'ai-sdk-provider-kimi';
+import { createKimi } from 'kimi-vercel-ai-sdk-provider
+';
 import { generateText, streamText } from 'ai';
 
 const kimi = createKimi({
@@ -96,7 +104,8 @@ const stream = await streamText({
 ### Kimi Code (Premium)
 
 ```ts
-import { kimiCode, createKimiCode } from 'ai-sdk-provider-kimi';
+import { kimiCode, createKimiCode } from 'kimi-vercel-ai-sdk-provider
+';
 import { generateText, streamText } from 'ai';
 
 // Using default instance (uses KIMI_CODE_API_KEY or KIMI_API_KEY env var)
@@ -293,7 +302,8 @@ const result = await generateText({
 ### Provider Tool Helpers
 
 ```ts
-import { kimi, kimiTools } from 'ai-sdk-provider-kimi';
+import { kimi, kimiTools } from 'kimi-vercel-ai-sdk-provider
+';
 
 const result = await generateText({
   model: kimi('kimi-k2.5'),
@@ -323,7 +333,8 @@ Kimi excels at reading long documents. This provider includes a file handling mo
 The provider includes a pre-configured file client:
 
 ```ts
-import { createKimi } from 'ai-sdk-provider-kimi';
+import { createKimi } from 'kimi-vercel-ai-sdk-provider
+';
 
 const kimi = createKimi();
 
@@ -348,7 +359,8 @@ await kimi.files.deleteFile(fileId);
 If you need custom configuration:
 
 ```ts
-import { KimiFileClient } from 'ai-sdk-provider-kimi';
+import { KimiFileClient } from 'kimi-vercel-ai-sdk-provider
+';
 
 const client = new KimiFileClient({
   baseURL: 'https://api.moonshot.ai/v1',
@@ -369,7 +381,8 @@ const result = await client.uploadAndExtract({
 Process experimental_attachments automatically:
 
 ```ts
-import { processAttachments } from 'ai-sdk-provider-kimi';
+import { processAttachments } from 'kimi-vercel-ai-sdk-provider
+';
 
 const processed = await processAttachments({
   attachments: message.experimental_attachments ?? [],
@@ -568,7 +581,8 @@ const result = await generateText({
 The provider automatically infers capabilities from model IDs:
 
 ```ts
-import { inferModelCapabilities, inferKimiCodeCapabilities } from 'ai-sdk-provider-kimi';
+import { inferModelCapabilities, inferKimiCodeCapabilities } from 'kimi-vercel-ai-sdk-provider
+';
 
 // Kimi Chat models
 const caps = inferModelCapabilities('kimi-k2.5-thinking');
@@ -746,7 +760,8 @@ import {
   KimiProviderOptions,
   KimiModelCapabilities,
   KimiCachingConfig,
-} from 'ai-sdk-provider-kimi';
+} from 'kimi-vercel-ai-sdk-provider
+';
 
 // Kimi Code Provider
 import {
@@ -773,7 +788,7 @@ import {
   KimiCodeCapabilities,
   ExtendedThinkingConfig,
   ReasoningEffort,
-} from 'ai-sdk-provider-kimi';
+} from 'kimi-vercel-ai-sdk-provider';
 
 // File Handling
 import {
@@ -794,7 +809,8 @@ import {
   FileUploadResult,
   Attachment,
   ProcessedAttachment,
-} from 'ai-sdk-provider-kimi';
+} from 'kimi-vercel-ai-sdk-provider
+';
 
 // Built-in Tools
 import {
@@ -803,7 +819,8 @@ import {
   createCodeInterpreterTool,
   KIMI_WEB_SEARCH_TOOL_NAME,
   KIMI_CODE_INTERPRETER_TOOL_NAME,
-} from 'ai-sdk-provider-kimi';
+} from 'kimi-vercel-ai-sdk-provider
+';
 
 // Errors
 import {
@@ -814,7 +831,8 @@ import {
   KimiContextLengthError,
   KimiContentFilterError,
   KimiModelNotFoundError,
-} from 'ai-sdk-provider-kimi';
+} from 'kimi-vercel-ai-sdk-provider
+';
 ```
 
 ### Feature Comparison

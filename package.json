@@ -1,5 +1,5 @@
 {
-  "name": "ai-sdk-provider-kimi",
+  "name": "kimi-vercel-ai-sdk-provider",
   "description": "Kimi (Moonshot AI) provider for Vercel AI SDK v6",
   "version": "0.2.0",
   "sideEffects": false,
@@ -61,10 +61,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aaroniker/ai-sdk-provider-kimi.git"
+    "url": "git+https://github.com/aaroniker/kimi-vercel-ai-sdk-provider.git"
   },
   "homepage": "https://ai-sdk.dev/providers/community-providers/custom-providers",
   "bugs": {
-    "url": "https://github.com/aaroniker/ai-sdk-provider-kimi/issues"
+    "url": "https://github.com/aaroniker/kimi-vercel-ai-sdk-provider/issues"
   }
 }

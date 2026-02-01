@@ -6,7 +6,8 @@
  * reasoning/thinking models, and Kimi Code premium coding service.
  *
  * @packageDocumentation
- * @module ai-sdk-provider-kimi
+ * @module kimi-vercel-ai-sdk-provider
+
  */
 
 // ============================================================================

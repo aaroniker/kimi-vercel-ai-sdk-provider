@@ -3,7 +3,8 @@
  *
  * To run these examples:
  * 1. Set your MOONSHOT_API_KEY environment variable
- * 2. Install dependencies: npm install ai ai-sdk-provider-kimi
+ * 2. Install dependencies: npm install ai kimi-vercel-ai-sdk-provider
+
  * 3. Run with: npx tsx examples/basic.ts
  */
 
@@ -25,7 +26,7 @@ async function basicGeneration() {
 
   const result = await generateText({
     model: kimi('kimi-k2.5'),
-    prompt: 'Explain quantum computing in one sentence.',
+    prompt: 'Explain quantum computing in one sentence.'
   });
 
   console.log('Response:', result.text);
@@ -41,7 +42,7 @@ async function streamingWithReasoning() {
 
   const stream = await streamText({
     model: kimi('kimi-k2.5-thinking', { includeUsageInStream: true }),
-    prompt: 'Solve step by step: If a train travels 120km in 2 hours, what is its speed in m/s?',
+    prompt: 'Solve step by step: If a train travels 120km in 2 hours, what is its speed in m/s?'
   });
 
   for await (const part of stream.fullStream) {
@@ -74,7 +75,7 @@ async function webSearchExample() {
 
   const result = await generateText({
     model: kimi('kimi-k2.5', { webSearch: true }),
-    prompt: 'What are the latest developments in AI as of today?',
+    prompt: 'What are the latest developments in AI as of today?'
   });
 
   console.log('Response:', result.text);
@@ -100,12 +101,12 @@ async function webSearchViaProviderOptions() {
         webSearch: {
           enabled: true,
           config: {
-            search_result: true,
-          },
+            search_result: true
+          }
         },
-        requestId: 'example-request-123',
-      },
-    },
+        requestId: 'example-request-123'
+      }
+    }
   });
 
   console.log('Response:', result.text);
@@ -129,22 +130,22 @@ async function toolUseExample() {
           properties: {
             location: {
               type: 'string',
-              description: 'The city name',
-            },
+              description: 'The city name'
+            }
           },
-          required: ['location'],
+          required: ['location']
         },
         execute: async ({ location }) => {
           // Simulated weather data
           const weather: Record<string, string> = {
             Tokyo: 'Sunny, 22°C',
-            'New York': 'Cloudy, 15°C',
+            'New York': 'Cloudy, 15°C'
           };
           return weather[location] || 'Unknown location';
-        },
-      },
+        }
+      }
     },
-    maxSteps: 3,
+    maxSteps: 3
   });
 
   console.log('Response:', result.text);
@@ -187,11 +188,13 @@ async function imageInputExample() {
           { type: 'text', text: 'Describe this image in detail.' },
           {
             type: 'image',
-            image: new URL('https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png'),
-          },
-        ],
-      },
-    ],
+            image: new URL(
+              'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png'
+            )
+          }
+        ]
+      }
+    ]
   });
 
   console.log('Response:', result.text);
@@ -210,9 +213,9 @@ async function jsonOutputExample() {
     responseFormat: { type: 'json' },
     providerOptions: {
       kimi: {
-        strictJsonSchema: true,
-      },
-    },
+        strictJsonSchema: true
+      }
+    }
   });
 
   console.log('Response:', result.text);

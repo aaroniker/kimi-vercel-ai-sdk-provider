@@ -146,7 +146,8 @@ export interface KimiProvider extends Omit<ProviderV3, 'specificationVersion'> {
  *
  * @example
  * ```ts
- * import { createKimi } from 'ai-sdk-provider-kimi';
+ * import { createKimi } from 'kimi-vercel-ai-sdk-provider
+';
  *
  * const kimi = createKimi({
  *   apiKey: process.env.MOONSHOT_API_KEY,
@@ -250,7 +251,8 @@ export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
  *
  * @example
  * ```ts
- * import { kimi } from 'ai-sdk-provider-kimi';
+ * import { kimi } from 'kimi-vercel-ai-sdk-provider
+';
  *
  * const result = await generateText({
  *   model: kimi('kimi-k2.5'),

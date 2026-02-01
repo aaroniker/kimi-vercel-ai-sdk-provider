@@ -103,7 +103,8 @@ export interface KimiCodeProvider extends Omit<ProviderV3, 'specificationVersion
  *
  * @example
  * ```ts
- * import { createKimiCode } from 'ai-sdk-provider-kimi';
+ * import { createKimiCode } from 'kimi-vercel-ai-sdk-provider
+';
  *
  * const kimiCode = createKimiCode({
  *   apiKey: process.env.KIMI_CODE_API_KEY,
@@ -217,7 +218,8 @@ export function createKimiCode(options: KimiCodeProviderSettings = {}): KimiCode
  *
  * @example
  * ```ts
- * import { kimiCode } from 'ai-sdk-provider-kimi';
+ * import { kimiCode } from 'kimi-vercel-ai-sdk-provider
+';
  *
  * const result = await generateText({
  *   model: kimiCode(), // Uses default model

@@ -7,7 +7,8 @@
  *
  * **Quick Start:**
  * ```ts
- * import { kimiCode } from 'ai-sdk-provider-kimi';
+ * import { kimiCode } from 'kimi-vercel-ai-sdk-provider
+';
  *
  * const result = await generateText({
  *   model: kimiCode(), // Uses 'kimi-for-coding' by default

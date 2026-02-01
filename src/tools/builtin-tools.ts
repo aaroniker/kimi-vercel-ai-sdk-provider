@@ -223,7 +223,8 @@ export const kimiTools = {
    *
    * @example
    * ```ts
-   * import { kimi, kimiTools } from 'ai-sdk-provider-kimi';
+   * import { kimi, kimiTools } from 'kimi-vercel-ai-sdk-provider
+';
    *
    * const result = await generateText({
    *   model: kimi('kimi-k2.5'),
@@ -250,7 +251,8 @@ export const kimiTools = {
    *
    * @example
    * ```ts
-   * import { kimi, kimiTools } from 'ai-sdk-provider-kimi';
+   * import { kimi, kimiTools } from 'kimi-vercel-ai-sdk-provider
+';
    *
    * const result = await generateText({
    *   model: kimi('kimi-k2.5'),
