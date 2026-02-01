@@ -34,6 +34,11 @@ This is a native implementation with full support for Kimi-specific features, no
 - [Reasoning/Thinking Models](#reasoningthinking-models)
 - [Video Input](#video-input-k25-models)
 - [Model Capabilities](#model-capabilities)
+- [Advanced Features](#advanced-features)
+  - [Temperature Locking](#temperature-locking-for-thinking-models)
+  - [File Content Caching](#file-content-caching)
+  - [Schema Sanitization](#schema-sanitization)
+  - [Reasoning Preservation](#reasoning-preservation-utilities)
 - [Provider Options](#provider-options)
 - [Available Models](#available-models-1)
 - [Regional Endpoints](#regional-endpoints)
@@ -56,6 +61,9 @@ This is a native implementation with full support for Kimi-specific features, no
 - **Native File & PDF Support** - Automatic file upload and content extraction
 - **Tool Choice Polyfill** - Simulates `required` and `tool` choices via system messages
 - **Context Caching** - Reduce costs by up to 90% for repeated long prompts
+- **Temperature Locking** - Automatic temperature enforcement for thinking models
+- **File Content Caching** - LRU cache to avoid re-uploading identical files
+- **Schema Sanitization** - Automatic cleanup of unsupported JSON Schema keywords
 
 ### Kimi Code (Premium Coding API)
 - High-speed output (up to 100 tokens/s)
@@ -603,6 +611,134 @@ const codeCaps = inferKimiCodeCapabilities('kimi-k2-thinking');
 // }
 ```
 
+## Advanced Features
+
+### Temperature Locking for Thinking Models
+
+Thinking models like `kimi-k2.5-thinking` require a fixed temperature of `1.0` for optimal reasoning. The provider automatically enforces this:
+
+```ts
+// Temperature is automatically set to 1.0 for thinking models
+const result = await generateText({
+  model: kimi('kimi-k2.5-thinking'),
+  temperature: 0.7, // Will be ignored with a warning
+  prompt: 'Solve this complex problem...',
+});
+
+// Check the response for warnings
+console.log(result.warnings);
+// [{ type: 'compatibility', feature: 'temperature', details: 'Thinking models require temperature=1.0...' }]
+```
+
+Thinking models also default to 32k max tokens to prevent reasoning truncation:
+
+```ts
+// No need to set maxTokens - defaults to 32768 for thinking models
+const result = await generateText({
+  model: kimi('kimi-k2.5-thinking'),
+  prompt: 'Explain quantum computing in detail...',
+});
+```
+
+### File Content Caching
+
+Avoid re-uploading the same files by enabling the LRU cache:
+
+```ts
+import { processAttachments } from 'kimi-vercel-ai-sdk-provider';
+
+// Enable caching (uses default global cache: 100 entries, 1 hour TTL)
+const processed = await processAttachments({
+  attachments: message.experimental_attachments ?? [],
+  clientConfig: {
+    baseURL: 'https://api.moonshot.ai/v1',
+    headers: () => ({ Authorization: `Bearer ${process.env.MOONSHOT_API_KEY}` }),
+  },
+  cache: true, // Enable file caching
+});
+
+// Or provide a custom cache instance
+import { FileCache } from 'kimi-vercel-ai-sdk-provider';
+
+const customCache = new FileCache({
+  maxSize: 200,      // Max 200 entries
+  ttlMs: 2 * 60 * 60 * 1000, // 2 hour TTL
+});
+
+const processed = await processAttachments({
+  attachments,
+  clientConfig,
+  cache: customCache,
+});
+```
+
+### Schema Sanitization
+
+Tool parameters are automatically sanitized to remove JSON Schema keywords not supported by Kimi:
+
+```ts
+// This schema with advanced JSON Schema features...
+const complexTool = {
+  name: 'search',
+  parameters: z.object({
+    query: z.string(),
+    filters: z.object({
+      $schema: 'http://json-schema.org/draft-07/schema#', // Removed
+      allOf: [{ minLength: 1 }], // Removed
+      anyOf: [{ type: 'string' }], // Removed
+    }),
+  }),
+};
+
+// ...is automatically sanitized before being sent to Kimi
+// Only basic properties (type, properties, required, description) are kept
+```
+
+### Reasoning Preservation Utilities
+
+Helpers for maintaining reasoning context in multi-turn conversations:
+
+```ts
+import { 
+  analyzeReasoningPreservation, 
+  recommendThinkingModel 
+} from 'kimi-vercel-ai-sdk-provider';
+
+// Analyze if reasoning is properly preserved in a conversation
+const messages = [
+  { role: 'user', content: 'Solve this step by step: ...' },
+  { 
+    role: 'assistant', 
+    content: [
+      { type: 'reasoning', text: 'First, I need to...' },
+      { type: 'text', text: 'The answer is 42.' }
+    ]
+  },
+  { role: 'user', content: 'Explain step 2 more.' },
+];
+
+const analysis = analyzeReasoningPreservation(messages);
+// {
+//   hasReasoningContent: true,
+//   reasoningPreserved: true,
+//   turnCount: 3,
+//   reasoningTurnCount: 1,
+//   recommendations: []
+// }
+
+// Get a recommendation on whether to use a thinking model
+const recommendation = recommendThinkingModel({
+  taskDescription: 'Complex mathematical proof',
+  requiresStepByStep: true,
+  complexity: 'high',
+});
+// {
+//   recommended: true,
+//   reason: 'Task requires step-by-step reasoning with high complexity',
+//   suggestedModel: 'kimi-k2.5-thinking'
+// }
+```
+
 ## Provider Options
 
 ### Kimi Chat Options
@@ -788,6 +924,12 @@ import {
 import {
   KimiFileClient,
   processAttachments,
+  FileCache,
+  generateContentHash,
+  generateCacheKey,
+  getDefaultFileCache,
+  setDefaultFileCache,
+  clearDefaultFileCache,
   SUPPORTED_FILE_EXTENSIONS,
   SUPPORTED_MIME_TYPES,
   isImageMediaType,
@@ -803,8 +945,21 @@ import {
   FileUploadResult,
   Attachment,
   ProcessedAttachment,
-} from 'kimi-vercel-ai-sdk-provider
-';
+  FileCacheOptions,
+  FileCacheEntry,
+} from 'kimi-vercel-ai-sdk-provider';
+
+// Utilities
+import {
+  analyzeReasoningPreservation,
+  recommendThinkingModel,
+  // Constants
+  THINKING_MODEL_TEMPERATURE,
+  THINKING_MODEL_DEFAULT_MAX_TOKENS,
+  STANDARD_MODEL_DEFAULT_MAX_TOKENS,
+  // Types
+  ReasoningAnalysis,
+} from 'kimi-vercel-ai-sdk-provider';
 
 // Built-in Tools
 import {

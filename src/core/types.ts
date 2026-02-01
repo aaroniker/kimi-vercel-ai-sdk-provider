@@ -70,7 +70,42 @@ export interface KimiModelCapabilities {
    * Whether the model supports structured outputs.
    */
   structuredOutputs?: boolean;
+
+  /**
+   * Default temperature for the model.
+   * Thinking models require temperature=1.0 for optimal reasoning.
+   */
+  defaultTemperature?: number;
+
+  /**
+   * Whether temperature is locked (cannot be changed).
+   * Thinking models have this set to true.
+   */
+  temperatureLocked?: boolean;
+
+  /**
+   * Default max output tokens for the model.
+   * Thinking models need higher limits to avoid truncated reasoning.
+   */
+  defaultMaxOutputTokens?: number;
 }
+
+/**
+ * Default temperature for thinking models.
+ * Kimi thinking models require temperature=1.0 for optimal reasoning quality.
+ */
+export const THINKING_MODEL_TEMPERATURE = 1.0;
+
+/**
+ * Default max output tokens for thinking models.
+ * Higher limit ensures reasoning traces aren't truncated.
+ */
+export const THINKING_MODEL_DEFAULT_MAX_TOKENS = 32768;
+
+/**
+ * Default max output tokens for standard models.
+ */
+export const STANDARD_MODEL_DEFAULT_MAX_TOKENS = 4096;
 
 /**
  * Infer model capabilities from the model ID.
@@ -78,10 +113,25 @@ export interface KimiModelCapabilities {
  * @param modelId - The model identifier
  * @returns Inferred capabilities based on model name patterns
  *
+ * @remarks
+ * This function automatically detects model capabilities and sets
+ * appropriate defaults:
+ * - Thinking models (`-thinking` suffix) get temperature=1.0 locked
+ * - Thinking models get 32k default max_tokens to avoid truncation
+ * - K2.5 models get video input support
+ *
  * @example
  * ```ts
  * const caps = inferModelCapabilities('kimi-k2.5-thinking');
- * // { thinking: true, alwaysThinking: true, videoInput: true, ... }
+ * // {
+ * //   thinking: true,
+ * //   alwaysThinking: true,
+ * //   videoInput: true,
+ * //   temperatureLocked: true,
+ * //   defaultTemperature: 1.0,
+ * //   defaultMaxOutputTokens: 32768,
+ * //   ...
+ * // }
  * ```
  */
 export function inferModelCapabilities(modelId: string): KimiModelCapabilities {
@@ -96,7 +146,12 @@ export function inferModelCapabilities(modelId: string): KimiModelCapabilities {
     maxContextSize: 256_000, // 256k context window
     toolCalling: true,
     jsonMode: true,
-    structuredOutputs: true
+    structuredOutputs: true,
+    // Thinking models require temperature=1.0 for optimal reasoning
+    defaultTemperature: isThinkingModel ? THINKING_MODEL_TEMPERATURE : undefined,
+    temperatureLocked: isThinkingModel,
+    // Thinking models need higher token limits to avoid truncated reasoning
+    defaultMaxOutputTokens: isThinkingModel ? THINKING_MODEL_DEFAULT_MAX_TOKENS : STANDARD_MODEL_DEFAULT_MAX_TOKENS
   };
 }
 

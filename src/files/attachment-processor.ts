@@ -4,6 +4,7 @@
  * @module
  */
 
+import { type FileCache, type FileCacheEntry, generateCacheKey, getDefaultFileCache } from './file-cache';
 import {
   getExtensionFromPath,
   getMediaTypeFromExtension,
@@ -64,6 +65,13 @@ export interface ProcessAttachmentsOptions {
   uploadImages?: boolean;
   /** Whether to delete files after extraction (cleanup) */
   cleanupAfterExtract?: boolean;
+  /**
+   * Enable caching of uploaded files.
+   * When true, uses the default global cache.
+   * When a FileCache instance, uses that cache.
+   * @default false
+   */
+  cache?: boolean | FileCache;
 }
 
 // ============================================================================
@@ -101,8 +109,12 @@ export async function processAttachments(options: ProcessAttachmentsOptions): Pr
     clientConfig,
     autoUploadDocuments = true,
     uploadImages = false,
-    cleanupAfterExtract = false
+    cleanupAfterExtract = false,
+    cache = false
   } = options;
+
+  // Resolve cache instance
+  const cacheInstance = cache === true ? getDefaultFileCache() : cache === false ? null : cache;
 
   const results: ProcessedAttachment[] = [];
   const client = new KimiFileClient(clientConfig);
@@ -112,7 +124,8 @@ export async function processAttachments(options: ProcessAttachmentsOptions): Pr
       const processed = await processAttachment(attachment, client, {
         autoUploadDocuments,
         uploadImages,
-        cleanupAfterExtract
+        cleanupAfterExtract,
+        cache: cacheInstance
       });
       results.push(processed);
     } catch (error) {
@@ -134,7 +147,12 @@ export async function processAttachments(options: ProcessAttachmentsOptions): Pr
 async function processAttachment(
   attachment: Attachment,
   client: KimiFileClient,
-  options: { autoUploadDocuments: boolean; uploadImages: boolean; cleanupAfterExtract: boolean }
+  options: {
+    autoUploadDocuments: boolean;
+    uploadImages: boolean;
+    cleanupAfterExtract: boolean;
+    cache: FileCache | null;
+  }
 ): Promise<ProcessedAttachment> {
   // Determine content type
   const contentType = resolveContentType(attachment);
@@ -196,13 +214,42 @@ async function processAttachment(
       };
     }
 
+    const filename = attachment.name ?? guessFilename(attachment, contentType);
+
+    // Check cache if enabled
+    if (options.cache) {
+      const cacheKey = generateCacheKey(data, filename);
+      const cached = options.cache.get(cacheKey);
+
+      if (cached) {
+        return {
+          original: attachment,
+          type: 'text-inject',
+          textContent: cached.content,
+          fileId: cached.fileId
+        };
+      }
+    }
+
     // Upload and extract content
     const result = await client.uploadAndExtract({
       data,
-      filename: attachment.name ?? guessFilename(attachment, contentType),
+      filename,
       mediaType: contentType,
       purpose: 'file-extract'
     });
+
+    // Store in cache if enabled (before cleanup)
+    if (options.cache && result.content) {
+      const cacheKey = generateCacheKey(data, filename);
+      const cacheEntry: FileCacheEntry = {
+        fileId: result.file.id,
+        content: result.content,
+        createdAt: Date.now(),
+        purpose: 'file-extract'
+      };
+      options.cache.set(cacheKey, cacheEntry);
+    }
 
     // Cleanup if requested
     if (options.cleanupAfterExtract && result.file.id) {

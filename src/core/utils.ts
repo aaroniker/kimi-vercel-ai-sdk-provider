@@ -208,3 +208,141 @@ export function extractMessageContent(message: {
 
   return { text, reasoning };
 }
+
+// ============================================================================
+// Multi-turn Reasoning Utilities
+// ============================================================================
+
+/**
+ * Information about reasoning content in a conversation.
+ */
+export interface ReasoningAnalysis {
+  /** Total number of messages with reasoning content */
+  messagesWithReasoning: number;
+  /** Total reasoning tokens (estimated by character count / 4) */
+  estimatedReasoningTokens: number;
+  /** Whether reasoning is properly preserved in the conversation */
+  isPreserved: boolean;
+  /** Messages that are missing expected reasoning content */
+  missingReasoningIndices: number[];
+}
+
+/**
+ * Analyze reasoning content preservation in a conversation.
+ *
+ * This utility helps verify that reasoning content is being properly
+ * preserved across multi-turn conversations with thinking models.
+ * Kimi requires reasoning content to be maintained in the message
+ * history for logical continuity in agentic/tool-calling scenarios.
+ *
+ * @param messages - Array of messages to analyze
+ * @returns Analysis of reasoning preservation
+ *
+ * @example
+ * ```ts
+ * const analysis = analyzeReasoningPreservation(messages);
+ * if (!analysis.isPreserved) {
+ *   console.warn('Reasoning content missing from messages:', analysis.missingReasoningIndices);
+ * }
+ * ```
+ */
+export function analyzeReasoningPreservation(
+  messages: Array<{
+    role: string;
+    content?: unknown;
+    reasoning_content?: string | null;
+    reasoning?: string | null;
+  }>
+): ReasoningAnalysis {
+  let messagesWithReasoning = 0;
+  let totalReasoningChars = 0;
+  const missingReasoningIndices: number[] = [];
+
+  // Track whether we've seen a tool call that should have reasoning preserved
+  let expectReasoningAfterToolCall = false;
+
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+
+    if (message.role === 'assistant') {
+      const { reasoning } = extractMessageContent(message);
+
+      if (reasoning.length > 0) {
+        messagesWithReasoning++;
+        totalReasoningChars += reasoning.length;
+        expectReasoningAfterToolCall = false;
+      } else if (expectReasoningAfterToolCall) {
+        // This assistant message should have reasoning from the previous turn
+        missingReasoningIndices.push(i);
+      }
+
+      // Check if this message has tool calls
+      if ('tool_calls' in message && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        expectReasoningAfterToolCall = true;
+      }
+    } else if (message.role === 'tool') {
+      // After a tool response, we expect the next assistant message to potentially have reasoning
+      expectReasoningAfterToolCall = true;
+    }
+  }
+
+  return {
+    messagesWithReasoning,
+    estimatedReasoningTokens: Math.ceil(totalReasoningChars / 4),
+    isPreserved: missingReasoningIndices.length === 0,
+    missingReasoningIndices
+  };
+}
+
+/**
+ * Check if a conversation is suitable for thinking models.
+ *
+ * Thinking models work best with:
+ * - Complex reasoning tasks
+ * - Multi-step problem solving
+ * - Tasks requiring chain-of-thought
+ *
+ * This helper provides guidance on whether a thinking model would benefit
+ * the conversation.
+ *
+ * @param messageCount - Number of messages in the conversation
+ * @param hasToolCalls - Whether the conversation includes tool calls
+ * @param estimatedComplexity - Estimated task complexity (0-1)
+ * @returns Recommendation on using thinking models
+ */
+export function recommendThinkingModel(
+  messageCount: number,
+  hasToolCalls: boolean,
+  estimatedComplexity: number
+): { recommended: boolean; reason: string } {
+  // Thinking models are recommended for:
+  // 1. Complex tasks (complexity > 0.5)
+  // 2. Agentic scenarios with tool calls
+  // 3. Multi-turn conversations where reasoning continuity matters
+
+  if (estimatedComplexity > 0.7) {
+    return {
+      recommended: true,
+      reason: 'High complexity task benefits from extended reasoning'
+    };
+  }
+
+  if (hasToolCalls && messageCount > 2) {
+    return {
+      recommended: true,
+      reason: 'Multi-turn tool usage benefits from reasoning preservation'
+    };
+  }
+
+  if (estimatedComplexity > 0.5) {
+    return {
+      recommended: true,
+      reason: 'Moderate complexity may benefit from reasoning'
+    };
+  }
+
+  return {
+    recommended: false,
+    reason: 'Standard model sufficient for this task'
+  };
+}

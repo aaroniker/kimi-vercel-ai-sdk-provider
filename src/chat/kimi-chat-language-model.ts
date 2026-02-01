@@ -205,11 +205,30 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
       messages.unshift({ role: 'system', content: toolChoiceSystemMessage });
     }
 
+    // Apply model-specific defaults and constraints
+    const caps = this.capabilities;
+
+    // Resolve temperature: thinking models require locked temperature
+    let resolvedTemperature = temperature;
+    if (caps.temperatureLocked && caps.defaultTemperature !== undefined) {
+      if (temperature !== undefined && temperature !== caps.defaultTemperature) {
+        warnings.push({
+          type: 'compatibility',
+          feature: 'temperature',
+          details: `Thinking models require temperature=${caps.defaultTemperature}. Your value (${temperature}) will be overridden.`
+        });
+      }
+      resolvedTemperature = caps.defaultTemperature;
+    }
+
+    // Resolve max_tokens: use model default if not specified
+    const resolvedMaxTokens = maxOutputTokens ?? caps.defaultMaxOutputTokens;
+
     const body = removeUndefinedEntries({
       model: this.modelId,
       messages,
-      max_tokens: maxOutputTokens,
-      temperature,
+      max_tokens: resolvedMaxTokens,
+      temperature: resolvedTemperature,
       top_p: topP,
       frequency_penalty: frequencyPenalty,
       presence_penalty: presencePenalty,

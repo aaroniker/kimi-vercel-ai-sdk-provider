@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-01
+
+### Added
+
+- **Temperature Locking for Thinking Models**: Thinking models now automatically enforce `temperature=1.0`
+  - Added `temperatureLocked` and `defaultTemperature` to `KimiModelCapabilities`
+  - Users receive a warning if attempting to override locked temperature
+  - Ensures optimal reasoning performance for thinking models
+
+- **Default max_tokens for Thinking Models**: Intelligent token defaults based on model type
+  - Thinking models default to 32k tokens to prevent reasoning truncation
+  - Standard models default to 4k tokens
+  - Added `defaultMaxOutputTokens` to `KimiModelCapabilities`
+
+- **File Content Caching**: LRU cache to avoid re-uploading identical files
+  - New `FileCache` class with configurable size limits and TTL
+  - Content-based hashing for deduplication
+  - Enable via `processAttachments({ cache: true })`
+  - Default: 100 entries, 1 hour TTL
+
+- **Schema Sanitization for Tool Parameters**: Automatic cleanup of unsupported JSON Schema keywords
+  - Removes `$schema`, `$id`, `$ref`, `$defs`, `allOf`, `anyOf`, `oneOf`, `not`, etc.
+  - Improves compatibility with Kimi's tool calling API
+  - Works automatically, no configuration needed
+
+- **Multi-turn Reasoning Preservation Helpers**: Utilities for maintaining reasoning context
+  - `analyzeReasoningPreservation()` - Detects if reasoning content is properly preserved
+  - `recommendThinkingModel()` - Recommends thinking models based on task complexity
+  - New `ReasoningAnalysis` type for structured analysis results
+
+### Changed
+
+- Tool preparation no longer passes `strict` mode to Kimi API for better compatibility
+- Added constants: `THINKING_MODEL_TEMPERATURE`, `THINKING_MODEL_DEFAULT_MAX_TOKENS`, `STANDARD_MODEL_DEFAULT_MAX_TOKENS`
+
+## [0.3.0] - 2026-01-28
+
+### Added
+
+- Internal improvements and bug fixes
+- Enhanced model capability detection
+
 ## [0.2.0] - 2026-02-01
 
 ### Added

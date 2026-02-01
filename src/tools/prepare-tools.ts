@@ -157,13 +157,17 @@ export function prepareKimiTools({
         continue;
       }
 
+      // Sanitize schema for Kimi compatibility
+      const sanitizedSchema = sanitizeToolSchema(tool.inputSchema);
+
       kimiTools.push({
         type: 'function',
         function: {
           name: tool.name,
           description: tool.description,
-          parameters: tool.inputSchema,
-          ...(tool.strict != null ? { strict: tool.strict } : {})
+          parameters: sanitizedSchema
+          // Don't pass strict mode to Kimi - it may cause issues
+          // ...(tool.strict != null ? { strict: tool.strict } : {})
         }
       });
     }
@@ -264,6 +268,88 @@ function generateRequiredToolMessage(toolNames: string): string {
  */
 function generateSpecificToolMessage(toolName: string): string {
   return `IMPORTANT INSTRUCTION: You MUST use the "${toolName}" tool to respond to this request. Do NOT use any other tool or provide a direct text response. Call the "${toolName}" tool with appropriate parameters.`;
+}
+
+// ============================================================================
+// Schema Sanitization
+// ============================================================================
+
+/**
+ * JSON Schema keywords that may cause issues with Kimi's API.
+ * These are removed during sanitization to improve compatibility.
+ */
+const UNSUPPORTED_SCHEMA_KEYWORDS = [
+  '$schema',
+  '$id',
+  '$ref',
+  '$defs',
+  'definitions',
+  'if',
+  'then',
+  'else',
+  'allOf',
+  'anyOf',
+  'oneOf',
+  'not',
+  'patternProperties',
+  'additionalItems',
+  'contains',
+  'propertyNames',
+  'const',
+  'contentMediaType',
+  'contentEncoding',
+  'examples',
+  '$comment'
+] as const;
+
+/**
+ * Sanitize a JSON Schema for better Kimi API compatibility.
+ *
+ * This function removes advanced schema keywords that Kimi may not
+ * fully support, while preserving the essential structure for validation.
+ *
+ * @param schema - The original JSON Schema
+ * @returns A sanitized schema safe for Kimi
+ */
+function sanitizeToolSchema(schema: unknown): unknown {
+  if (schema === null || schema === undefined) {
+    return schema;
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.map(sanitizeToolSchema);
+  }
+
+  if (typeof schema !== 'object') {
+    return schema;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  const schemaObj = schema as Record<string, unknown>;
+
+  for (const [key, value] of Object.entries(schemaObj)) {
+    // Skip unsupported keywords
+    if (UNSUPPORTED_SCHEMA_KEYWORDS.includes(key as (typeof UNSUPPORTED_SCHEMA_KEYWORDS)[number])) {
+      continue;
+    }
+
+    // Recursively sanitize nested objects
+    if (key === 'properties' && typeof value === 'object' && value !== null) {
+      const props: Record<string, unknown> = {};
+      for (const [propKey, propValue] of Object.entries(value as Record<string, unknown>)) {
+        props[propKey] = sanitizeToolSchema(propValue);
+      }
+      sanitized[key] = props;
+    } else if (key === 'items' && typeof value === 'object') {
+      sanitized[key] = sanitizeToolSchema(value);
+    } else if (key === 'additionalProperties' && typeof value === 'object') {
+      sanitized[key] = sanitizeToolSchema(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
 }
 
 // ============================================================================

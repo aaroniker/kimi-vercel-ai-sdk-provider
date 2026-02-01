@@ -225,7 +225,8 @@ describe('prepareKimiTools', () => {
       });
     });
 
-    it('should include strict when provided', () => {
+    it('should not pass strict mode to Kimi for better compatibility', () => {
+      // Kimi doesn't fully support strict mode, so we don't pass it
       const result = prepareKimiTools({
         tools: [
           {
@@ -238,13 +239,80 @@ describe('prepareKimiTools', () => {
         ]
       });
 
-      expect(result.tools?.[0]).toMatchObject({
-        type: 'function',
-        function: {
-          name: 'test',
-          strict: true
-        }
+      // Strict should not be present in the output
+      const tool = result.tools?.[0];
+      expect(tool).toBeDefined();
+      if (tool && 'function' in tool) {
+        expect(tool.function).not.toHaveProperty('strict');
+      }
+    });
+
+    it('should sanitize JSON schema by removing unsupported keywords', () => {
+      const result = prepareKimiTools({
+        tools: [
+          {
+            type: 'function',
+            name: 'test',
+            description: 'Test tool',
+            inputSchema: {
+              $schema: 'http://json-schema.org/draft-07/schema#',
+              $id: 'test-schema',
+              type: 'object',
+              properties: {
+                name: { type: 'string' }
+              },
+              $defs: { unused: { type: 'string' } },
+              $comment: 'This is a comment'
+            }
+          }
+        ]
       });
+
+      const tool = result.tools?.[0];
+      expect(tool).toBeDefined();
+      expect(tool?.type).toBe('function');
+      if (tool && tool.type === 'function') {
+        const params = tool.function.parameters as Record<string, unknown>;
+        expect(params).not.toHaveProperty('$schema');
+        expect(params).not.toHaveProperty('$id');
+        expect(params).not.toHaveProperty('$defs');
+        expect(params).not.toHaveProperty('$comment');
+        expect(params.type).toBe('object');
+        expect(params.properties).toEqual({ name: { type: 'string' } });
+      }
+    });
+
+    it('should preserve basic schema properties', () => {
+      const result = prepareKimiTools({
+        tools: [
+          {
+            type: 'function',
+            name: 'test',
+            description: 'Test tool',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Name field' },
+                count: { type: 'number', minimum: 0 }
+              },
+              required: ['name']
+            }
+          }
+        ]
+      });
+
+      const tool = result.tools?.[0];
+      expect(tool).toBeDefined();
+      expect(tool?.type).toBe('function');
+      if (tool && tool.type === 'function') {
+        const params = tool.function.parameters as Record<string, unknown>;
+        expect(params.type).toBe('object');
+        expect(params.required).toEqual(['name']);
+        expect((params.properties as Record<string, unknown>).name).toEqual({
+          type: 'string',
+          description: 'Name field'
+        });
+      }
     });
   });
 

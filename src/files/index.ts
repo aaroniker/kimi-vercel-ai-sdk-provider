@@ -4,7 +4,22 @@
  * @module
  */
 
-export { type Attachment, type ProcessedAttachment, processAttachments } from './attachment-processor';
+export {
+  type Attachment,
+  type ProcessAttachmentsOptions,
+  type ProcessedAttachment,
+  processAttachments
+} from './attachment-processor';
+export {
+  FileCache,
+  type FileCacheEntry,
+  type FileCacheOptions,
+  clearDefaultFileCache,
+  generateCacheKey,
+  generateContentHash,
+  getDefaultFileCache,
+  setDefaultFileCache
+} from './file-cache';
 export {
   SUPPORTED_FILE_EXTENSIONS,
   SUPPORTED_MIME_TYPES,

@@ -13,7 +13,7 @@ export type {
   KimiTokenUsage
 } from './types';
 // Utilities
-export type { KimiExtendedUsage } from './utils';
+export type { KimiExtendedUsage, ReasoningAnalysis } from './utils';
 // Errors
 export {
   KimiAuthenticationError,
@@ -26,11 +26,18 @@ export {
   kimiErrorSchema,
   kimiFailedResponseHandler
 } from './errors';
-export { inferModelCapabilities } from './types';
 export {
+  STANDARD_MODEL_DEFAULT_MAX_TOKENS,
+  THINKING_MODEL_DEFAULT_MAX_TOKENS,
+  THINKING_MODEL_TEMPERATURE,
+  inferModelCapabilities
+} from './types';
+export {
+  analyzeReasoningPreservation,
   convertKimiUsage,
   extractMessageContent,
   getKimiRequestId,
   getResponseMetadata,
-  mapKimiFinishReason
+  mapKimiFinishReason,
+  recommendThinkingModel
 } from './utils';
