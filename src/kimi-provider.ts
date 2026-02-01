@@ -1,22 +1,34 @@
+/**
+ * Kimi provider factory.
+ * @module
+ */
+
+import { type LanguageModelV3, NoSuchModelError, type ProviderV3 } from '@ai-sdk/provider';
 import {
-  LanguageModelV3,
-  NoSuchModelError,
-  ProviderV3,
-} from '@ai-sdk/provider';
-import {
-  FetchFunction,
+  type FetchFunction,
   loadApiKey,
   loadOptionalSetting,
-  withoutTrailingSlash,
   withUserAgentSuffix,
+  withoutTrailingSlash
 } from '@ai-sdk/provider-utils';
-import { KimiChatLanguageModel } from './kimi-chat-language-model';
-import { KimiChatModelId, KimiChatSettings } from './kimi-chat-options';
+import { KimiChatLanguageModel, type KimiChatModelId, type KimiChatSettings } from './chat';
+import { kimiTools } from './tools';
 import { VERSION } from './version';
+
+// ============================================================================
+// Constants
+// ============================================================================
 
 const GLOBAL_BASE_URL = 'https://api.moonshot.ai/v1';
 const CN_BASE_URL = 'https://api.moonshot.cn/v1';
 
+// ============================================================================
+// Provider Settings
+// ============================================================================
+
+/**
+ * Settings for creating a Kimi provider instance.
+ */
 export interface KimiProviderSettings {
   /**
    * Moonshot AI API key. Defaults to the MOONSHOT_API_KEY environment variable.
@@ -30,6 +42,10 @@ export interface KimiProviderSettings {
 
   /**
    * Select the regional endpoint when baseURL is not provided.
+   * - `global`: Use the global API endpoint (api.moonshot.ai)
+   * - `cn`: Use the China API endpoint (api.moonshot.cn)
+   *
+   * @default 'global'
    */
   endpoint?: 'global' | 'cn';
 
@@ -64,26 +80,90 @@ export interface KimiProviderSettings {
   supportedUrls?: LanguageModelV3['supportedUrls'];
 }
 
+// ============================================================================
+// Provider Interface
+// ============================================================================
+
+/**
+ * The Kimi provider interface.
+ */
 export interface KimiProvider extends Omit<ProviderV3, 'specificationVersion'> {
   specificationVersion: 'v3';
+
+  /**
+   * Creates a chat language model.
+   * @param modelId - The model identifier
+   * @param settings - Optional model settings
+   */
   (modelId: KimiChatModelId, settings?: KimiChatSettings): LanguageModelV3;
 
   /**
    * Creates a chat language model.
+   * @param modelId - The model identifier
+   * @param settings - Optional model settings
    */
   languageModel(modelId: KimiChatModelId, settings?: KimiChatSettings): LanguageModelV3;
 
   /**
-   * Creates a chat language model (alias).
+   * Creates a chat language model (alias for languageModel).
+   * @param modelId - The model identifier
+   * @param settings - Optional model settings
    */
   chat(modelId: KimiChatModelId, settings?: KimiChatSettings): LanguageModelV3;
+
+  /**
+   * Built-in tools that can be used with Kimi models.
+   */
+  tools: typeof kimiTools;
 }
 
+// ============================================================================
+// Provider Factory
+// ============================================================================
+
+/**
+ * Create a Kimi provider instance.
+ *
+ * @param options - Provider settings
+ * @returns A configured Kimi provider
+ *
+ * @example
+ * ```ts
+ * import { createKimi } from 'ai-sdk-provider-kimi';
+ *
+ * const kimi = createKimi({
+ *   apiKey: process.env.MOONSHOT_API_KEY,
+ * });
+ *
+ * const result = await generateText({
+ *   model: kimi('kimi-k2.5'),
+ *   prompt: 'Hello!',
+ * });
+ * ```
+ *
+ * @example
+ * ```ts
+ * // With web search enabled
+ * const result = await generateText({
+ *   model: kimi('kimi-k2.5', { webSearch: true }),
+ *   prompt: 'What are the latest AI news?',
+ * });
+ * ```
+ *
+ * @example
+ * ```ts
+ * // With code interpreter
+ * const result = await generateText({
+ *   model: kimi('kimi-k2.5', { codeInterpreter: true }),
+ *   prompt: 'Calculate the factorial of 20',
+ * });
+ * ```
+ */
 export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
   const resolvedBaseURL =
     loadOptionalSetting({
       settingValue: options.baseURL,
-      environmentVariableName: 'MOONSHOT_BASE_URL',
+      environmentVariableName: 'MOONSHOT_BASE_URL'
     }) ?? (options.endpoint === 'cn' ? CN_BASE_URL : GLOBAL_BASE_URL);
 
   const baseURL = withoutTrailingSlash(resolvedBaseURL) ?? GLOBAL_BASE_URL;
@@ -94,34 +174,26 @@ export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
         Authorization: `Bearer ${loadApiKey({
           apiKey: options.apiKey,
           environmentVariableName: 'MOONSHOT_API_KEY',
-          description: 'Moonshot',
+          description: 'Moonshot'
         })}`,
-        ...options.headers,
+        ...options.headers
       },
-      `ai-sdk/kimi/${VERSION}`,
+      `ai-sdk/kimi/${VERSION}`
     );
 
-  const createChatModel = (
-    modelId: KimiChatModelId,
-    settings: KimiChatSettings = {},
-  ) =>
+  const createChatModel = (modelId: KimiChatModelId, settings: KimiChatSettings = {}) =>
     new KimiChatLanguageModel(modelId, settings, {
       provider: 'kimi.chat',
       baseURL,
       headers: getHeaders,
       fetch: options.fetch,
       generateId: options.generateId,
-      supportsStructuredOutputs:
-        settings.supportsStructuredOutputs ?? options.supportsStructuredOutputs,
-      includeUsageInStream:
-        settings.includeUsageInStream ?? options.includeUsageInStream,
-      supportedUrls: settings.supportedUrls ?? options.supportedUrls,
+      supportsStructuredOutputs: settings.supportsStructuredOutputs ?? options.supportsStructuredOutputs,
+      includeUsageInStream: settings.includeUsageInStream ?? options.includeUsageInStream,
+      supportedUrls: settings.supportedUrls ?? options.supportedUrls
     });
 
-  const provider: KimiProvider = (
-    modelId: KimiChatModelId,
-    settings?: KimiChatSettings,
-  ): KimiChatLanguageModel => {
+  const provider: KimiProvider = (modelId: KimiChatModelId, settings?: KimiChatSettings): KimiChatLanguageModel => {
     if (new.target) {
       throw new Error('The Kimi provider function cannot be called with new.');
     }
@@ -132,6 +204,7 @@ export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
   provider.specificationVersion = 'v3';
   provider.languageModel = createChatModel;
   provider.chat = createChatModel;
+  provider.tools = kimiTools;
 
   provider.embeddingModel = (modelId: string) => {
     throw new NoSuchModelError({ modelId, modelType: 'embeddingModel' });
@@ -148,4 +221,19 @@ export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
   return provider;
 }
 
+/**
+ * Default Kimi provider instance.
+ *
+ * Uses the MOONSHOT_API_KEY environment variable for authentication.
+ *
+ * @example
+ * ```ts
+ * import { kimi } from 'ai-sdk-provider-kimi';
+ *
+ * const result = await generateText({
+ *   model: kimi('kimi-k2.5'),
+ *   prompt: 'Hello!',
+ * });
+ * ```
+ */
 export const kimi = createKimi();

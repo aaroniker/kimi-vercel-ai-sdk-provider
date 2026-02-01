@@ -1,58 +1,61 @@
+/**
+ * Kimi chat language model implementation.
+ * @module
+ */
+
 import {
   InvalidResponseDataError,
-  JSONValue,
-  LanguageModelV3,
-  LanguageModelV3CallOptions,
-  LanguageModelV3Content,
-  LanguageModelV3FinishReason,
-  LanguageModelV3GenerateResult,
-  LanguageModelV3StreamPart,
-  LanguageModelV3StreamResult,
-  SharedV3ProviderMetadata,
-  SharedV3Warning,
+  type JSONValue,
+  type LanguageModelV3,
+  type LanguageModelV3CallOptions,
+  type LanguageModelV3Content,
+  type LanguageModelV3FinishReason,
+  type LanguageModelV3GenerateResult,
+  type LanguageModelV3StreamPart,
+  type LanguageModelV3StreamResult,
+  type SharedV3ProviderMetadata,
+  type SharedV3Warning
 } from '@ai-sdk/provider';
 import {
+  type ParseResult,
   combineHeaders,
   createEventSourceResponseHandler,
   createJsonResponseHandler,
-  FetchFunction,
   generateId,
   isParsableJson,
   parseProviderOptions,
-  ParseResult,
   postJsonToApi,
-  removeUndefinedEntries,
+  removeUndefinedEntries
 } from '@ai-sdk/provider-utils';
 import { z } from 'zod/v4';
-import {
-  KimiChatModelId,
-  KimiChatSettings,
-  KimiWebSearchToolConfig,
-  kimiProviderOptionsSchema,
-  inferModelCapabilities,
-} from './kimi-chat-options';
-import { convertToKimiChatMessages } from './kimi-convert-messages';
-import { kimiFailedResponseHandler, kimiErrorSchema } from './kimi-error';
-import { prepareKimiTools } from './kimi-prepare-tools';
+import { kimiErrorSchema, kimiFailedResponseHandler } from '../core';
+import { type KimiCodeInterpreterToolOptions, type KimiWebSearchToolOptions, prepareKimiTools } from '../tools';
+import { convertToKimiChatMessages } from './kimi-chat-messages';
 import {
   convertKimiUsage,
+  extractCodeInterpreterTokens,
+  extractMessageContent,
   extractWebSearchTokens,
   getKimiRequestId,
   getResponseMetadata,
-  mapKimiFinishReason,
-} from './kimi-response';
+  mapKimiFinishReason
+} from './kimi-chat-response';
+import {
+  type KimiChatConfig,
+  type KimiChatModelId,
+  type KimiChatSettings,
+  type KimiProviderOptions,
+  inferModelCapabilities,
+  kimiProviderOptionsSchema
+} from './kimi-chat-settings';
 
-export type KimiChatConfig = {
-  provider: string;
-  baseURL: string;
-  headers: () => Record<string, string | undefined>;
-  fetch?: FetchFunction;
-  generateId?: () => string;
-  supportsStructuredOutputs?: boolean;
-  includeUsageInStream?: boolean;
-  supportedUrls?: LanguageModelV3['supportedUrls'];
-};
+// ============================================================================
+// Language Model Implementation
+// ============================================================================
 
+/**
+ * Kimi chat language model implementing LanguageModelV3.
+ */
 export class KimiChatLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = 'v3';
   readonly modelId: KimiChatModelId;
@@ -62,11 +65,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
   private readonly generateIdFn: () => string;
   private readonly supportsStructuredOutputs: boolean;
 
-  constructor(
-    modelId: KimiChatModelId,
-    settings: KimiChatSettings,
-    config: KimiChatConfig,
-  ) {
+  constructor(modelId: KimiChatModelId, settings: KimiChatSettings, config: KimiChatConfig) {
     this.modelId = modelId;
     this.settings = settings;
     this.config = config;
@@ -89,14 +88,14 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
     const inferred = inferModelCapabilities(this.modelId);
     return {
       ...inferred,
-      ...this.settings.capabilities,
+      ...this.settings.capabilities
     };
   }
 
   get supportedUrls() {
     const caps = this.capabilities;
     const patterns: Record<string, RegExp[]> = {
-      'image/*': [/^https?:\/\/.*$/i],
+      'image/*': [/^https?:\/\/.*$/i]
     };
 
     // Add video support for models that support it
@@ -120,20 +119,20 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
     seed,
     providerOptions,
     tools,
-    toolChoice,
+    toolChoice
   }: LanguageModelV3CallOptions) {
     const warnings: SharedV3Warning[] = [];
 
     const deprecatedOptions = await parseProviderOptions({
       provider: 'moonshot',
       providerOptions,
-      schema: kimiProviderOptionsSchema,
+      schema: kimiProviderOptionsSchema
     });
 
     if (deprecatedOptions != null) {
       warnings.push({
         type: 'other',
-        message: "The 'moonshot' key in providerOptions is deprecated. Use 'kimi' instead.",
+        message: "The 'moonshot' key in providerOptions is deprecated. Use 'kimi' instead."
       });
     }
 
@@ -141,12 +140,12 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
     const kimiOptions = await parseProviderOptions({
       provider: providerOptionsName,
       providerOptions,
-      schema: kimiProviderOptionsSchema,
+      schema: kimiProviderOptionsSchema
     });
 
-    const options = {
+    const options: KimiProviderOptions = {
       ...(deprecatedOptions ?? {}),
-      ...(kimiOptions ?? {}),
+      ...(kimiOptions ?? {})
     };
 
     if (topK != null) {
@@ -155,39 +154,36 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
 
     const strictJsonSchema = options.strictJsonSchema ?? true;
 
-    if (
-      responseFormat?.type === 'json' &&
-      responseFormat.schema != null &&
-      !this.supportsStructuredOutputs
-    ) {
+    if (responseFormat?.type === 'json' && responseFormat.schema != null && !this.supportsStructuredOutputs) {
       warnings.push({
         type: 'unsupported',
         feature: 'responseFormat',
-        details: 'JSON schema response format requires structured outputs support.',
+        details: 'JSON schema response format requires structured outputs support.'
       });
     }
 
     // Resolve web search configuration from settings and provider options
-    const webSearch = resolveWebSearchConfig(
-      this.settings.webSearch,
-      options.webSearch,
-    );
+    const webSearch = resolveBuiltinToolConfig(this.settings.webSearch, options.webSearch);
+
+    // Resolve code interpreter configuration from settings and provider options
+    const codeInterpreter = resolveBuiltinToolConfig(this.settings.codeInterpreter, options.codeInterpreter);
 
     const {
       tools: kimiTools,
       toolChoice: kimiToolChoice,
-      toolWarnings,
+      toolWarnings
     } = prepareKimiTools({
       tools,
       toolChoice,
       webSearch,
+      codeInterpreter
     });
 
     const passthroughOptions = getPassthroughOptions({
       providerOptions,
       providerOptionsName,
       deprecatedProviderOptionsName: 'moonshot',
-      knownKeys: Object.keys(kimiProviderOptionsSchema.shape),
+      knownKeys: Object.keys(kimiProviderOptionsSchema.shape)
     });
 
     const body = removeUndefinedEntries({
@@ -209,8 +205,8 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                   schema: responseFormat.schema,
                   strict: strictJsonSchema,
                   name: responseFormat.name ?? 'response',
-                  description: responseFormat.description,
-                },
+                  description: responseFormat.description
+                }
               }
             : { type: 'json_object' }
           : undefined,
@@ -220,34 +216,36 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
       ...(kimiTools != null && options.parallelToolCalls != null
         ? { parallel_tool_calls: options.parallelToolCalls }
         : {}),
-      ...passthroughOptions,
+      ...passthroughOptions
     });
 
     const requestHeaders: Record<string, string | undefined> = {
       ...(options.requestId ? { 'X-Request-ID': options.requestId } : {}),
-      ...(options.extraHeaders ?? {}),
+      ...(options.extraHeaders ?? {})
     };
 
     return {
       body,
       warnings: [...warnings, ...toolWarnings],
-      requestHeaders,
+      requestHeaders
     };
   }
 
-  async doGenerate(
-    options: LanguageModelV3CallOptions,
-  ): Promise<LanguageModelV3GenerateResult> {
+  async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
     const { body, warnings, requestHeaders } = await this.getArgs(options);
 
-    const { responseHeaders, value: response, rawValue } = await postJsonToApi({
+    const {
+      responseHeaders,
+      value: response,
+      rawValue
+    } = await postJsonToApi({
       url: `${this.config.baseURL}/chat/completions`,
       headers: combineHeaders(this.config.headers(), requestHeaders, options.headers),
       body,
       failedResponseHandler: kimiFailedResponseHandler,
       successfulResponseHandler: createJsonResponseHandler(kimiChatResponseSchema),
       abortSignal: options.abortSignal,
-      fetch: this.config.fetch,
+      fetch: this.config.fetch
     });
 
     const choice = response.choices[0];
@@ -269,48 +267,46 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
           type: 'tool-call',
           toolCallId: toolCall.id ?? this.generateIdFn(),
           toolName: toolCall.function.name,
-          input: toolCall.function.arguments ?? '',
+          input: toolCall.function.arguments ?? ''
         });
       }
     }
 
-    // Extract web search token usage from tool calls
+    // Extract built-in tool token usage from tool calls
     const webSearchTokens = extractWebSearchTokens(choice.message.tool_calls);
+    const codeInterpreterTokens = extractCodeInterpreterTokens(choice.message.tool_calls);
 
     const providerMetadata = buildProviderMetadata({
       providerOptionsName: this.providerOptionsName,
       responseHeaders,
       webSearchTokens,
+      codeInterpreterTokens
     });
 
     return {
       content,
       finishReason: {
         unified: mapKimiFinishReason(choice.finish_reason),
-        raw: choice.finish_reason ?? undefined,
+        raw: choice.finish_reason ?? undefined
       },
-      usage: convertKimiUsage(response.usage, webSearchTokens),
+      usage: convertKimiUsage(response.usage, webSearchTokens, codeInterpreterTokens),
       ...(providerMetadata ? { providerMetadata } : {}),
       request: { body },
       response: {
         ...getResponseMetadata(response),
         headers: responseHeaders,
-        body: rawValue,
+        body: rawValue
       },
-      warnings,
+      warnings
     };
   }
 
-  async doStream(
-    options: LanguageModelV3CallOptions,
-  ): Promise<LanguageModelV3StreamResult> {
+  async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
     const { body, warnings, requestHeaders } = await this.getArgs(options);
     const streamBody = {
       ...body,
       stream: true,
-      stream_options: this.config.includeUsageInStream
-        ? { include_usage: true }
-        : undefined,
+      stream_options: this.config.includeUsageInStream ? { include_usage: true } : undefined
     };
 
     const { responseHeaders, value: response } = await postJsonToApi({
@@ -318,18 +314,16 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
       headers: combineHeaders(this.config.headers(), requestHeaders, options.headers),
       body: streamBody,
       failedResponseHandler: kimiFailedResponseHandler,
-      successfulResponseHandler: createEventSourceResponseHandler(
-        kimiChatChunkSchema,
-      ),
+      successfulResponseHandler: createEventSourceResponseHandler(kimiChatChunkSchema),
       abortSignal: options.abortSignal,
-      fetch: this.config.fetch,
+      fetch: this.config.fetch
     });
 
     const requestId = getKimiRequestId(responseHeaders);
 
     let finishReason: LanguageModelV3FinishReason = {
       unified: 'other',
-      raw: undefined,
+      raw: undefined
     };
     let usage: z.infer<typeof kimiTokenUsageSchema> | undefined;
 
@@ -345,14 +339,11 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
     }> = [];
 
     const providerOptionsName = this.providerOptionsName;
-    const generateIdFn = this.generateIdFn;
+    const _generateIdFn = this.generateIdFn;
 
     return {
       stream: response.pipeThrough(
-        new TransformStream<
-          ParseResult<z.infer<typeof kimiChatChunkSchema>>,
-          LanguageModelV3StreamPart
-        >({
+        new TransformStream<ParseResult<z.infer<typeof kimiChatChunkSchema>>, LanguageModelV3StreamPart>({
           start(controller) {
             controller.enqueue({ type: 'stream-start', warnings });
           },
@@ -373,7 +364,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
               const error = (chunk.value as { error?: { message?: string } }).error;
               controller.enqueue({
                 type: 'error',
-                error: error?.message ?? chunk.value,
+                error: error?.message ?? chunk.value
               });
               return;
             }
@@ -384,7 +375,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
               isFirstChunk = false;
               controller.enqueue({
                 type: 'response-metadata',
-                ...getResponseMetadata(value),
+                ...getResponseMetadata(value)
               });
             }
 
@@ -400,7 +391,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
             if (choice.finish_reason != null) {
               finishReason = {
                 unified: mapKimiFinishReason(choice.finish_reason),
-                raw: choice.finish_reason ?? undefined,
+                raw: choice.finish_reason ?? undefined
               };
             }
 
@@ -416,14 +407,17 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                   controller.enqueue({ type: 'text-end', id: 'text-0' });
                   isActiveText = false;
                 }
-                controller.enqueue({ type: 'reasoning-start', id: 'reasoning-0' });
+                controller.enqueue({
+                  type: 'reasoning-start',
+                  id: 'reasoning-0'
+                });
                 isActiveReasoning = true;
               }
 
               controller.enqueue({
                 type: 'reasoning-delta',
                 id: 'reasoning-0',
-                delta: reasoningDelta,
+                delta: reasoningDelta
               });
             }
 
@@ -441,7 +435,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
               controller.enqueue({
                 type: 'text-delta',
                 id: 'text-0',
-                delta: delta.content,
+                delta: delta.content
               });
             }
 
@@ -458,21 +452,21 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                   if (toolCallDelta.id == null) {
                     throw new InvalidResponseDataError({
                       data: toolCallDelta,
-                      message: "Expected 'id' to be a string.",
+                      message: "Expected 'id' to be a string."
                     });
                   }
 
                   if (toolCallDelta.function?.name == null) {
                     throw new InvalidResponseDataError({
                       data: toolCallDelta,
-                      message: "Expected 'function.name' to be a string.",
+                      message: "Expected 'function.name' to be a string."
                     });
                   }
 
                   controller.enqueue({
                     type: 'tool-input-start',
                     id: toolCallDelta.id,
-                    toolName: toolCallDelta.function.name,
+                    toolName: toolCallDelta.function.name
                   });
 
                   toolCalls[index] = {
@@ -480,9 +474,9 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                     type: 'function',
                     function: {
                       name: toolCallDelta.function.name,
-                      arguments: toolCallDelta.function.arguments ?? '',
+                      arguments: toolCallDelta.function.arguments ?? ''
                     },
-                    hasFinished: false,
+                    hasFinished: false
                   };
 
                   const toolCall = toolCalls[index];
@@ -491,7 +485,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                     controller.enqueue({
                       type: 'tool-input-delta',
                       id: toolCall.id,
-                      delta: toolCall.function.arguments,
+                      delta: toolCall.function.arguments
                     });
                   }
 
@@ -502,7 +496,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                       type: 'tool-call',
                       toolCallId: toolCall.id,
                       toolName: toolCall.function.name,
-                      input: toolCall.function.arguments,
+                      input: toolCall.function.arguments
                     });
 
                     toolCall.hasFinished = true;
@@ -523,7 +517,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                 controller.enqueue({
                   type: 'tool-input-delta',
                   id: toolCall.id,
-                  delta: toolCallDelta.function?.arguments ?? '',
+                  delta: toolCallDelta.function?.arguments ?? ''
                 });
 
                 if (isParsableJson(toolCall.function.arguments)) {
@@ -533,7 +527,7 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
                     type: 'tool-call',
                     toolCallId: toolCall.id,
                     toolName: toolCall.function.name,
-                    input: toolCall.function.arguments,
+                    input: toolCall.function.arguments
                   });
 
                   toolCall.hasFinished = true;
@@ -553,40 +547,42 @@ export class KimiChatLanguageModel implements LanguageModelV3 {
               isActiveText = false;
             }
 
-            for (const toolCall of toolCalls.filter(call => !call.hasFinished)) {
+            for (const toolCall of toolCalls.filter((call) => !call.hasFinished)) {
               controller.enqueue({ type: 'tool-input-end', id: toolCall.id });
               controller.enqueue({
                 type: 'tool-call',
                 toolCallId: toolCall.id,
                 toolName: toolCall.function.name,
-                input: toolCall.function.arguments,
+                input: toolCall.function.arguments
               });
             }
 
-            // Extract web search tokens from accumulated tool calls
+            // Extract built-in tool tokens from accumulated tool calls
             const webSearchTokens = extractWebSearchTokens(toolCalls);
+            const codeInterpreterTokens = extractCodeInterpreterTokens(toolCalls);
 
             const providerMetadata: SharedV3ProviderMetadata | undefined =
-              requestId || webSearchTokens != null
+              requestId || webSearchTokens != null || codeInterpreterTokens != null
                 ? {
                     [providerOptionsName]: {
                       ...(requestId ? { requestId } : {}),
                       ...(webSearchTokens != null ? { webSearchTokens } : {}),
-                    },
+                      ...(codeInterpreterTokens != null ? { codeInterpreterTokens } : {})
+                    }
                   }
                 : undefined;
 
             controller.enqueue({
               type: 'finish',
               finishReason,
-              usage: convertKimiUsage(usage, webSearchTokens),
-              ...(providerMetadata ? { providerMetadata } : {}),
+              usage: convertKimiUsage(usage, webSearchTokens, codeInterpreterTokens),
+              ...(providerMetadata ? { providerMetadata } : {})
             });
-          },
-        }),
+          }
+        })
       ),
       request: { body: streamBody },
-      response: { headers: responseHeaders },
+      response: { headers: responseHeaders }
     };
   }
 }
@@ -599,14 +595,16 @@ function buildProviderMetadata({
   providerOptionsName,
   responseHeaders,
   webSearchTokens,
+  codeInterpreterTokens
 }: {
   providerOptionsName: string;
   responseHeaders?: Record<string, string>;
   webSearchTokens?: number;
+  codeInterpreterTokens?: number;
 }): SharedV3ProviderMetadata | undefined {
   const requestId = getKimiRequestId(responseHeaders);
 
-  if (!requestId && webSearchTokens == null) {
+  if (!requestId && webSearchTokens == null && codeInterpreterTokens == null) {
     return undefined;
   }
 
@@ -614,65 +612,24 @@ function buildProviderMetadata({
     [providerOptionsName]: {
       ...(requestId ? { requestId } : {}),
       ...(webSearchTokens != null ? { webSearchTokens } : {}),
-    },
-  };
-}
-
-function extractMessageContent(message: {
-  content?: unknown;
-  reasoning_content?: string | null;
-  reasoning?: string | null;
-}) {
-  let text = '';
-  let reasoning = '';
-
-  if (typeof message.content === 'string') {
-    text = message.content;
-  } else if (Array.isArray(message.content)) {
-    for (const part of message.content) {
-      if (part && typeof part === 'object') {
-        const candidate = part as Record<string, unknown>;
-        if (candidate.type === 'text' && typeof candidate.text === 'string') {
-          text += candidate.text;
-        }
-        if (candidate.type === 'thinking' && typeof candidate.thinking === 'string') {
-          reasoning += candidate.thinking;
-        }
-        if (candidate.type === 'reasoning' && typeof candidate.text === 'string') {
-          reasoning += candidate.text;
-        }
-      }
+      ...(codeInterpreterTokens != null ? { codeInterpreterTokens } : {})
     }
-  }
-
-  if (typeof message.reasoning_content === 'string') {
-    reasoning += message.reasoning_content;
-  }
-
-  if (typeof message.reasoning === 'string') {
-    reasoning += message.reasoning;
-  }
-
-  return { text, reasoning };
+  };
 }
 
 function getPassthroughOptions({
   providerOptions,
   providerOptionsName,
   deprecatedProviderOptionsName,
-  knownKeys,
+  knownKeys
 }: {
   providerOptions: LanguageModelV3CallOptions['providerOptions'];
   providerOptionsName: string;
   deprecatedProviderOptionsName: string;
   knownKeys: string[];
 }) {
-  const rawOptions = [
-    providerOptions?.[deprecatedProviderOptionsName],
-    providerOptions?.[providerOptionsName],
-  ].filter(
-    (entry): entry is Record<string, JSONValue | undefined> =>
-      entry != null && typeof entry === 'object',
+  const rawOptions = [providerOptions?.[deprecatedProviderOptionsName], providerOptions?.[providerOptionsName]].filter(
+    (entry): entry is Record<string, JSONValue | undefined> => entry != null && typeof entry === 'object'
   );
 
   const passthrough: Record<string, JSONValue | undefined> = {};
@@ -688,24 +645,28 @@ function getPassthroughOptions({
   return passthrough;
 }
 
-function resolveWebSearchConfig(
-  settingsWebSearch: KimiChatSettings['webSearch'],
-  optionsWebSearch: boolean | { enabled: boolean; config?: { search_result?: boolean } } | undefined,
-): KimiWebSearchToolConfig | undefined {
+type BuiltinToolOptions = boolean | KimiWebSearchToolOptions | KimiCodeInterpreterToolOptions | undefined;
+
+function resolveBuiltinToolConfig<T extends BuiltinToolOptions>(
+  settingsConfig: T | undefined,
+  optionsConfig: T | undefined
+): T | undefined {
   // Provider options take precedence
-  if (optionsWebSearch != null) {
-    if (typeof optionsWebSearch === 'boolean') {
-      return optionsWebSearch ? { enabled: true } : undefined;
+  if (optionsConfig != null) {
+    if (typeof optionsConfig === 'boolean') {
+      return optionsConfig ? ({ enabled: true } as T) : undefined;
     }
-    return optionsWebSearch.enabled ? optionsWebSearch : undefined;
+    const config = optionsConfig as { enabled: boolean };
+    return config.enabled ? optionsConfig : undefined;
   }
 
   // Fall back to settings
-  if (settingsWebSearch != null) {
-    if (typeof settingsWebSearch === 'boolean') {
-      return settingsWebSearch ? { enabled: true } : undefined;
+  if (settingsConfig != null) {
+    if (typeof settingsConfig === 'boolean') {
+      return settingsConfig ? ({ enabled: true } as T) : undefined;
     }
-    return settingsWebSearch.enabled ? settingsWebSearch : undefined;
+    const config = settingsConfig as { enabled: boolean };
+    return config.enabled ? settingsConfig : undefined;
   }
 
   return undefined;
@@ -722,14 +683,14 @@ const kimiTokenUsageSchema = z
     total_tokens: z.number().nullish(),
     prompt_tokens_details: z
       .object({
-        cached_tokens: z.number().nullish(),
+        cached_tokens: z.number().nullish()
       })
       .nullish(),
     completion_tokens_details: z
       .object({
-        reasoning_tokens: z.number().nullish(),
+        reasoning_tokens: z.number().nullish()
       })
-      .nullish(),
+      .nullish()
   })
   .nullish();
 
@@ -750,16 +711,16 @@ const kimiChatResponseSchema = z.looseObject({
               id: z.string().nullish(),
               function: z.object({
                 name: z.string(),
-                arguments: z.string().nullish(),
-              }),
-            }),
+                arguments: z.string().nullish()
+              })
+            })
           )
-          .nullish(),
+          .nullish()
       }),
-      finish_reason: z.string().nullish(),
-    }),
+      finish_reason: z.string().nullish()
+    })
   ),
-  usage: kimiTokenUsageSchema,
+  usage: kimiTokenUsageSchema
 });
 
 const kimiChatChunkBaseSchema = z.looseObject({
@@ -781,17 +742,17 @@ const kimiChatChunkBaseSchema = z.looseObject({
                 id: z.string().nullish(),
                 function: z.object({
                   name: z.string().nullish(),
-                  arguments: z.string().nullish(),
-                }),
-              }),
+                  arguments: z.string().nullish()
+                })
+              })
             )
-            .nullish(),
+            .nullish()
         })
         .nullish(),
-      finish_reason: z.string().nullish(),
-    }),
+      finish_reason: z.string().nullish()
+    })
   ),
-  usage: kimiTokenUsageSchema,
+  usage: kimiTokenUsageSchema
 });
 
 const kimiChatChunkSchema = z.union([kimiChatChunkBaseSchema, kimiErrorSchema]);

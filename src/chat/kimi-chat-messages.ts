@@ -1,15 +1,23 @@
+/**
+ * Message conversion utilities for Kimi API.
+ * @module
+ */
+
 import {
-  LanguageModelV3Prompt,
-  LanguageModelV3ToolResultPart,
-  UnsupportedFunctionalityError,
+  type LanguageModelV3Prompt,
+  type LanguageModelV3ToolResultPart,
+  UnsupportedFunctionalityError
 } from '@ai-sdk/provider';
 import { convertToBase64 } from '@ai-sdk/provider-utils';
-import { isBuiltinToolName } from './kimi-prepare-tools';
+import { isBuiltinToolName } from '../tools';
 
 // ============================================================================
 // Message Types
 // ============================================================================
 
+/**
+ * A Kimi chat message.
+ */
 export type KimiChatMessage =
   | {
       role: 'system';
@@ -35,39 +43,38 @@ export type KimiChatMessage =
       content: string;
     };
 
+/**
+ * A content part in a user message.
+ */
 export type KimiChatContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
   | { type: 'video_url'; video_url: { url: string } };
 
+/**
+ * A sequence of Kimi chat messages.
+ */
 export type KimiChatPrompt = Array<KimiChatMessage>;
 
 // ============================================================================
 // Supported Media Types
 // ============================================================================
 
-const SUPPORTED_IMAGE_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/*',
-];
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/*'];
 
-const SUPPORTED_VIDEO_TYPES = [
-  'video/mp4',
-  'video/webm',
-  'video/ogg',
-  'video/*',
-];
+const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/ogg', 'video/*'];
 
 // ============================================================================
 // Message Conversion
 // ============================================================================
 
-export function convertToKimiChatMessages(
-  prompt: LanguageModelV3Prompt,
-): KimiChatPrompt {
+/**
+ * Convert AI SDK prompt format to Kimi chat messages.
+ *
+ * @param prompt - The AI SDK prompt
+ * @returns Kimi chat messages
+ */
+export function convertToKimiChatMessages(prompt: LanguageModelV3Prompt): KimiChatPrompt {
   const messages: KimiChatPrompt = [];
 
   for (const { role, content } of prompt) {
@@ -84,7 +91,7 @@ export function convertToKimiChatMessages(
 
         messages.push({
           role: 'user',
-          content: content.map(part => {
+          content: content.map((part) => {
             switch (part.type) {
               case 'text':
                 return { type: 'text' as const, text: part.text };
@@ -112,7 +119,7 @@ export function convertToKimiChatMessages(
                 }
 
                 throw new UnsupportedFunctionalityError({
-                  functionality: `file part media type ${part.mediaType}`,
+                  functionality: `file part media type ${part.mediaType}`
                 });
               }
               default: {
@@ -120,7 +127,7 @@ export function convertToKimiChatMessages(
                 throw new Error(`Unsupported part type: ${_exhaustiveCheck}`);
               }
             }
-          }),
+          })
         });
         break;
       }
@@ -149,8 +156,8 @@ export function convertToKimiChatMessages(
                 type: 'function',
                 function: {
                   name: part.toolName,
-                  arguments: JSON.stringify(part.input),
-                },
+                  arguments: JSON.stringify(part.input)
+                }
               });
               break;
             }
@@ -175,7 +182,7 @@ export function convertToKimiChatMessages(
           role: 'assistant',
           content: text.length > 0 ? text : null,
           ...(reasoning.length > 0 ? { reasoning_content: reasoning } : {}),
-          ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+          ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {})
         });
         break;
       }
@@ -188,7 +195,7 @@ export function convertToKimiChatMessages(
           messages.push({
             role: 'tool',
             tool_call_id: toolResponse.toolCallId,
-            content: serializeToolResult(toolResponse),
+            content: serializeToolResult(toolResponse)
           });
         }
         break;
@@ -208,42 +215,33 @@ export function convertToKimiChatMessages(
 // ============================================================================
 
 function isImageMediaType(mediaType: string): boolean {
-  return (
-    mediaType.startsWith('image/') ||
-    SUPPORTED_IMAGE_TYPES.includes(mediaType)
-  );
+  return mediaType.startsWith('image/') || SUPPORTED_IMAGE_TYPES.includes(mediaType);
 }
 
 function isVideoMediaType(mediaType: string): boolean {
-  return (
-    mediaType.startsWith('video/') ||
-    SUPPORTED_VIDEO_TYPES.includes(mediaType)
-  );
+  return mediaType.startsWith('video/') || SUPPORTED_VIDEO_TYPES.includes(mediaType);
 }
 
-function convertImagePart(part: {
-  mediaType: string;
-  data: URL | Uint8Array | string;
-}): { type: 'image_url'; image_url: { url: string } } {
-  const mediaType =
-    part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
+function convertImagePart(part: { mediaType: string; data: URL | Uint8Array | string }): {
+  type: 'image_url';
+  image_url: { url: string };
+} {
+  const mediaType = part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
 
   const url =
-    part.data instanceof URL
-      ? part.data.toString()
-      : `data:${mediaType};base64,${convertToBase64(part.data)}`;
+    part.data instanceof URL ? part.data.toString() : `data:${mediaType};base64,${convertToBase64(part.data)}`;
 
   return { type: 'image_url', image_url: { url } };
 }
 
-function convertVideoPart(part: {
-  mediaType: string;
-  data: URL | Uint8Array | string;
-}): { type: 'video_url'; video_url: { url: string } } {
+function convertVideoPart(part: { mediaType: string; data: URL | Uint8Array | string }): {
+  type: 'video_url';
+  video_url: { url: string };
+} {
   // Video must be provided as a URL - base64 inline video is not practical
   if (!(part.data instanceof URL)) {
     throw new UnsupportedFunctionalityError({
-      functionality: 'inline video data (video must be provided as a URL)',
+      functionality: 'inline video data (video must be provided as a URL)'
     });
   }
 
@@ -278,9 +276,7 @@ function serializeToolResult(toolResponse: LanguageModelV3ToolResultPart): strin
   }
 }
 
-function serializeBuiltinToolResult(
-  output: LanguageModelV3ToolResultPart['output'],
-): string {
+function serializeBuiltinToolResult(output: LanguageModelV3ToolResultPart['output']): string {
   // For built-in tools, we need to pass through the result as-is
   // The model expects the arguments it passed to be echoed back
   switch (output.type) {
