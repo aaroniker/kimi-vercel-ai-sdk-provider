@@ -1,5 +1,7 @@
 # kimi-vercel-ai-sdk-provider
 
+<img width="1600" height="1278" alt="image" src="https://github.com/user-attachments/assets/fcde2cc0-73e2-4d32-b1bc-b4d9eaca5a6a" />
+
 Native Kimi (Moonshot AI) provider for Vercel AI SDK.
 
 This is a native implementation with full support for Kimi-specific features, not a generic OpenAI-compatible wrapper.
