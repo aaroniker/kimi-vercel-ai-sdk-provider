@@ -42,8 +42,9 @@ describe('createKimi', () => {
   it('should throw when called with new', () => {
     const provider = createKimi();
     // The error can be either our custom message or the native constructor error
-    // biome-ignore lint/suspicious/noExplicitAny: testing edge case requires any
-    expect(() => new (provider as any)('kimi-k2.5')).toThrow();
+    // Test that the provider function throws when used as a constructor
+    const ProviderAsConstructor = provider as unknown as new (modelId: string) => unknown;
+    expect(() => new ProviderAsConstructor('kimi-k2.5')).toThrow();
   });
 
   it('should throw for unsupported model types', () => {

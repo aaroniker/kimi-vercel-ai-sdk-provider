@@ -1,7 +1,7 @@
 {
   "name": "kimi-vercel-ai-sdk-provider",
   "description": "Kimi (Moonshot AI) provider for Vercel AI SDK v6",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -15,6 +15,9 @@
   "scripts": {
     "build": "tsup",
     "clean": "del-cli dist *.tsbuildinfo",
+    "format": "biome format --write",
+    "lint": "biome lint --write",
+    "lint:fix": "biome lint --write",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -19,7 +19,7 @@ export const kimiErrorSchema = z.union([
     error: z.object({
       message: z.string(),
       type: z.string().nullish(),
-      param: z.any().nullish(),
+      param: z.string().nullish(),
       code: z.union([z.string(), z.number()]).nullish(),
       request_id: z.string().nullish()
     })

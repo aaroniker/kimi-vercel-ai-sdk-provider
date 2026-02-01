@@ -107,10 +107,7 @@
     }
   },
   "files": {
-    "includes": [
-      "src/**/*.ts",
-      "examples/**/*.ts"
-    ]
+    "includes": ["src/**/*.ts", "examples/**/*.ts"]
   },
   "vcs": {
     "enabled": true,

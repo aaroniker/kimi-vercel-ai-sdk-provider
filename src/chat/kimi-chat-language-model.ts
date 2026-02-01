@@ -765,6 +765,26 @@ const kimiTokenUsageSchema = z
   })
   .nullish();
 
+/**
+ * Schema for content parts in response messages.
+ * Can be text, image, or other content types.
+ */
+const kimiContentPartSchema = z.union([
+  z.object({
+    type: z.literal('text'),
+    text: z.string()
+  }),
+  z.object({
+    type: z.literal('image_url'),
+    image_url: z.object({
+      url: z.string()
+    })
+  }),
+  z.looseObject({
+    type: z.string()
+  })
+]);
+
 const kimiChatResponseSchema = z.looseObject({
   id: z.string().nullish(),
   created: z.number().nullish(),
@@ -773,7 +793,7 @@ const kimiChatResponseSchema = z.looseObject({
     z.object({
       message: z.object({
         role: z.string().nullish(),
-        content: z.union([z.string(), z.array(z.any())]).nullish(),
+        content: z.union([z.string(), z.array(kimiContentPartSchema)]).nullish(),
         reasoning_content: z.string().nullish(),
         reasoning: z.string().nullish(),
         tool_calls: z

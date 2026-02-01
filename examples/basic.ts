@@ -245,6 +245,7 @@ async function main() {
     await basicGeneration();
     await streamingWithReasoning();
     await webSearchExample();
+    await webSearchViaProviderOptions();
     await toolUseExample();
     await imageInputExample();
     await jsonOutputExample();

@@ -171,9 +171,7 @@ describe('toAnthropicThinking', () => {
 
 describe('convertToKimiCodePrompt', () => {
   it('should convert simple user message', async () => {
-    const result = await convertToKimiCodePrompt([
-      { role: 'user', content: [{ type: 'text', text: 'Hello!' }] }
-    ]);
+    const result = await convertToKimiCodePrompt([{ role: 'user', content: [{ type: 'text', text: 'Hello!' }] }]);
 
     expect(result.system).toBeUndefined();
     expect(result.messages).toEqual([{ role: 'user', content: 'Hello!' }]);

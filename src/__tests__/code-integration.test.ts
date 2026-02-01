@@ -1,8 +1,26 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createKimiCode } from '../code';
 
 // Mock fetch for API testing
 const mockFetch = vi.fn();
+
+async function readStreamParts<T>(stream: ReadableStream<T>) {
+  const reader = stream.getReader();
+  const parts: T[] = [];
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+    if (value !== undefined) {
+      parts.push(value);
+    }
+  }
+
+  return parts;
+}
 
 describe('KimiCodeLanguageModel Integration', () => {
   const originalEnv = process.env;
@@ -147,7 +165,7 @@ describe('KimiCodeLanguageModel Integration', () => {
 
       const result = await model.doGenerate({
         prompt: [{ role: 'user', content: [{ type: 'text', text: 'Read the index file' }] }],
-        
+
         tools: [
           {
             type: 'function',
@@ -198,8 +216,7 @@ describe('KimiCodeLanguageModel Integration', () => {
       });
 
       await model.doGenerate({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Think hard' }] }],
-        
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Think hard' }] }]
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -239,8 +256,7 @@ describe('KimiCodeLanguageModel Integration', () => {
       const model = provider('kimi-for-coding');
 
       const result = await model.doGenerate({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
-        
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }]
       });
 
       expect(result.usage.inputTokens.total).toBe(100);
@@ -273,8 +289,7 @@ describe('KimiCodeLanguageModel Integration', () => {
 
       await expect(
         model.doGenerate({
-          prompt: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
-          
+          prompt: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }]
         })
       ).rejects.toThrow('Invalid API key');
     });
@@ -305,7 +320,7 @@ describe('KimiCodeLanguageModel Integration', () => {
 
       const result = await model.doGenerate({
         prompt: [{ role: 'user', content: [{ type: 'text', text: 'Write a long story' }] }],
-        
+
         maxOutputTokens: 100
       });
 
@@ -350,14 +365,10 @@ describe('KimiCodeLanguageModel Integration', () => {
       const model = provider('kimi-for-coding');
 
       const result = await model.doStream({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Say hello' }] }],
-        
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Say hello' }] }]
       });
 
-      const parts: any[] = [];
-      for await (const part of result.stream) {
-        parts.push(part);
-      }
+      const parts = await readStreamParts<LanguageModelV3StreamPart>(result.stream);
 
       // Verify streaming worked
       expect(parts.length).toBeGreaterThan(0);
@@ -409,14 +420,10 @@ describe('KimiCodeLanguageModel Integration', () => {
       const model = provider('kimi-k2-thinking');
 
       const result = await model.doStream({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Think about this' }] }],
-        
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Think about this' }] }]
       });
 
-      const parts: any[] = [];
-      for await (const part of result.stream) {
-        parts.push(part);
-      }
+      const parts = await readStreamParts<LanguageModelV3StreamPart>(result.stream);
 
       const partTypes = parts.map((p) => p.type);
       expect(partTypes).toContain('reasoning-start');
@@ -463,7 +470,7 @@ describe('KimiCodeLanguageModel Integration', () => {
 
       const result = await model.doStream({
         prompt: [{ role: 'user', content: [{ type: 'text', text: 'Read the file' }] }],
-        
+
         tools: [
           {
             type: 'function',
@@ -474,10 +481,7 @@ describe('KimiCodeLanguageModel Integration', () => {
         ]
       });
 
-      const parts: any[] = [];
-      for await (const part of result.stream) {
-        parts.push(part);
-      }
+      const parts = await readStreamParts<LanguageModelV3StreamPart>(result.stream);
 
       const partTypes = parts.map((p) => p.type);
       expect(partTypes).toContain('tool-input-start');
@@ -485,9 +489,12 @@ describe('KimiCodeLanguageModel Integration', () => {
       expect(partTypes).toContain('tool-input-end');
       expect(partTypes).toContain('tool-call');
 
-      const toolCallPart = parts.find((p) => p.type === 'tool-call');
-      expect(toolCallPart.toolName).toBe('read_file');
-      expect(toolCallPart.input).toContain('/src/index.ts');
+      const toolCallPart = parts.find(
+        (p): p is Extract<LanguageModelV3StreamPart, { type: 'tool-call' }> => p.type === 'tool-call'
+      );
+      expect(toolCallPart).toBeDefined();
+      expect(toolCallPart?.toolName).toBe('read_file');
+      expect(toolCallPart?.input).toContain('/src/index.ts');
     });
   });
 
@@ -517,8 +524,7 @@ describe('KimiCodeLanguageModel Integration', () => {
       const model = provider('kimi-for-coding');
 
       await model.doGenerate({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
-        
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }]
       });
 
       const headers = mockFetch.mock.calls[0][1].headers;

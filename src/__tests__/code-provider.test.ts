@@ -1,12 +1,11 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  createKimiCode,
-  kimiCode,
-  KimiCodeLanguageModel,
-  KIMI_CODE_BASE_URL,
   KIMI_CODE_DEFAULT_MODEL,
   KIMI_CODE_THINKING_MODEL,
-  inferKimiCodeCapabilities
+  KimiCodeLanguageModel,
+  createKimiCode,
+  inferKimiCodeCapabilities,
+  kimiCode
 } from '../code';
 
 describe('createKimiCode', () => {

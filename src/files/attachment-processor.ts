@@ -257,7 +257,8 @@ function guessFilename(attachment: Attachment, contentType: string): string {
     const urlPath = attachment.url.split('?')[0];
     const segments = urlPath.split('/');
     const lastSegment = segments[segments.length - 1];
-    if (lastSegment && lastSegment.includes('.')) {
+
+    if (lastSegment.includes('.')) {
       return lastSegment;
     }
   }

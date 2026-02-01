@@ -6,17 +6,10 @@ Native Kimi (Moonshot AI) provider for Vercel AI SDK.
 
 This is a native implementation with full support for Kimi-specific features, not a generic OpenAI-compatible wrapper.
 
-[![npm version](https://img.shields.io/npm/v/kimi-vercel-ai-sdk-provider
-.svg?style=flat-square)](https://www.npmjs.com/package/kimi-vercel-ai-sdk-provider
-) 
-[![npm bundle size](https://img.shields.io/bundlephobia/minzip/kimi-vercel-ai-sdk-provider
-?style=flat-square&label=bundle%20size)](https://bundlephobia.com/package/kimi-vercel-ai-sdk-provider
-)
-[![npm downloads](https://img.shields.io/npm/dm/kimi-vercel-ai-sdk-provider
-.svg?style=flat-square)](https://www.npmjs.com/package/kimi-vercel-ai-sdk-provider
-)
-[![license](https://img.shields.io/npm/l/kimi-vercel-ai-sdk-provider
-.svg?style=flat-square)](https://github.com/aaroniker/kimi-vercel-ai-sdk-provider/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/kimi-vercel-ai-sdk-provider.svg?style=flat-square)](https://www.npmjs.com/package/kimi-vercel-ai-sdk-provider) 
+[![npm bundle size](https://img.shields.io/bundlephobia/minzip/kimi-vercel-ai-sdk-provider?style=flat-square&label=bundle%20size)](https://bundlephobia.com/package/kimi-vercel-ai-sdk-provider)
+[![npm downloads](https://img.shields.io/npm/dm/kimi-vercel-ai-sdk-provider.svg?style=flat-square)](https://www.npmjs.com/package/kimi-vercel-ai-sdk-provider)
+[![license](https://img.shields.io/npm/l/kimi-vercel-ai-sdk-provider.svg?style=flat-square)](https://github.com/aaroniker/kimi-vercel-ai-sdk-provider/blob/main/LICENSE)
 
 ## Table of Contents
 
@@ -81,8 +74,7 @@ npm install kimi-vercel-ai-sdk-provider
 ### Kimi Chat (Standard)
 
 ```ts
-import { createKimi } from 'kimi-vercel-ai-sdk-provider
-';
+import { createKimi } from 'kimi-vercel-ai-sdk-provider';
 import { generateText, streamText } from 'ai';
 
 const kimi = createKimi({
