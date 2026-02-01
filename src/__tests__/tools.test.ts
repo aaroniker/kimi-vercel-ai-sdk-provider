@@ -462,7 +462,7 @@ describe('prepareKimiTools', () => {
         details: 'Using tool choice polyfill with system message injection.'
       });
       expect(result.toolChoiceSystemMessage).toBeDefined();
-      expect(result.toolChoiceSystemMessage).toContain('MUST use one of the available tools');
+      expect(result.toolChoiceSystemMessage).toContain('MUST use at least one of the available tools');
     });
 
     it('should warn and fallback to auto for required tool choice without polyfill', () => {

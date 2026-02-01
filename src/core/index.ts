@@ -17,11 +17,16 @@ export type { KimiExtendedUsage, ReasoningAnalysis } from './utils';
 // Errors
 export {
   KimiAuthenticationError,
+  KimiCodeValidationError,
   KimiContentFilterError,
   KimiContextLengthError,
+  KimiEnsembleTimeoutError,
+  KimiEnsembleValidationError,
   KimiError,
   KimiModelNotFoundError,
+  KimiMultiAgentError,
   KimiRateLimitError,
+  KimiScaffoldError,
   KimiValidationError,
   kimiErrorSchema,
   kimiFailedResponseHandler

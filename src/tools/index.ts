@@ -3,6 +3,7 @@
  * @module
  */
 
+export type { AutoDetectConfig, AutoDetectToolsResult } from './auto-detect';
 export type {
   KimiBuiltinTool,
   KimiCodeInterpreterConfig,
@@ -15,8 +16,11 @@ export type {
   KimiFunctionTool,
   KimiTool,
   PrepareToolsOptions,
-  PrepareToolsResult
+  PrepareToolsResult,
+  ToolGuidanceOptions
 } from './prepare-tools';
+// Auto-detection
+export { detectToolsFromPrompt, hasToolOptOut, shouldAutoEnableTools } from './auto-detect';
 // Built-in tools
 export {
   KIMI_CODE_INTERPRETER_TOOL_NAME,
@@ -30,4 +34,4 @@ export {
   kimiTools
 } from './builtin-tools';
 // Tool preparation
-export { prepareKimiTools } from './prepare-tools';
+export { generateToolGuidanceMessage, prepareKimiTools } from './prepare-tools';

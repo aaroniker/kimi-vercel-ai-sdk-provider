@@ -116,6 +116,15 @@ export interface KimiChatSettings {
    * Reduces costs by up to 90% for repeated long prompts.
    */
   caching?: boolean | KimiCachingConfig;
+
+  /**
+   * Auto-enable tools based on prompt content analysis.
+   * When true, the provider will analyze the prompt and automatically
+   * enable webSearch or codeInterpreter if patterns match.
+   *
+   * @default false
+   */
+  autoEnableTools?: boolean;
 }
 
 // ============================================================================
@@ -207,7 +216,12 @@ export const kimiProviderOptionsSchema = z.object({
   /**
    * Enable tool choice polyfill for this request.
    */
-  toolChoicePolyfill: z.boolean().optional()
+  toolChoicePolyfill: z.boolean().optional(),
+
+  /**
+   * Auto-enable tools based on prompt content analysis.
+   */
+  autoEnableTools: z.boolean().optional()
 });
 
 /**

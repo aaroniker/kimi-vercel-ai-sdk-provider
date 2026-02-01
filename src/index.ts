@@ -14,7 +14,15 @@
 // Kimi Provider (Standard API)
 // ============================================================================
 
-export type { KimiProvider, KimiProviderSettings } from './kimi-provider';
+export type {
+  EnsembleOptions,
+  KimiProvider,
+  KimiProviderSettings,
+  MultiAgentOptions,
+  ProviderGenerateFunction,
+  ScaffoldProjectOptions,
+  ValidateCodeOptions
+} from './kimi-provider';
 export { createKimi, kimi } from './kimi-provider';
 
 // ============================================================================
@@ -91,12 +99,15 @@ export {
 // ============================================================================
 
 export type {
+  AutoDetectConfig,
+  AutoDetectToolsResult,
   KimiBuiltinTool,
   KimiCodeInterpreterConfig,
   KimiCodeInterpreterToolOptions,
   KimiWebSearchConfig,
   KimiWebSearchToolConfig,
-  KimiWebSearchToolOptions
+  KimiWebSearchToolOptions,
+  ToolGuidanceOptions
 } from './tools';
 export {
   KIMI_CODE_INTERPRETER_TOOL_NAME,
@@ -104,8 +115,91 @@ export {
   createCodeInterpreterTool,
   createKimiWebSearchTool,
   createWebSearchTool,
-  kimiTools
+  detectToolsFromPrompt,
+  generateToolGuidanceMessage,
+  hasToolOptOut,
+  kimiTools,
+  shouldAutoEnableTools
 } from './tools';
+
+// ============================================================================
+// Ensemble / Multi-Sampling
+// ============================================================================
+
+export type {
+  EnsembleConfig,
+  EnsembleMetadata,
+  EnsembleResponse,
+  EnsembleResult,
+  GenerateFunction,
+  MultiSamplerOptions,
+  ScoringHeuristic,
+  SelectionStrategy
+} from './ensemble';
+export { MultiSampler, createSingletonEnsembleResult } from './ensemble';
+
+// ============================================================================
+// Code Validation
+// ============================================================================
+
+export type {
+  CodeBlock,
+  CodeExtractionResult,
+  CodeValidationConfig,
+  CodeValidatorOptions,
+  FixAttempt,
+  LanguageDetectionResult,
+  SupportedLanguage,
+  ValidationError,
+  ValidationErrorType,
+  ValidationResult,
+  ValidationSeverity,
+  ValidationStrictness
+} from './code-validation';
+export {
+  CodeValidator,
+  containsCode,
+  createFailedValidationResult,
+  createPassedValidationResult,
+  detectLanguage,
+  extractCodeBlocks,
+  extractPrimaryCode,
+  getFileExtension
+} from './code-validation';
+
+// ============================================================================
+// Multi-Agent Collaboration
+// ============================================================================
+
+export type {
+  AgentStep,
+  GenerateResult,
+  MultiAgentConfig,
+  MultiAgentMetadata,
+  MultiAgentResult,
+  WorkflowContext,
+  WorkflowType
+} from './multi-agent';
+export {
+  DEFAULT_SYSTEM_PROMPTS,
+  WorkflowRunner,
+  createEmptyMultiAgentResult
+} from './multi-agent';
+
+// ============================================================================
+// Project Scaffolding
+// ============================================================================
+
+export type {
+  OutputFormat,
+  ProjectFile,
+  ProjectMetadata,
+  ProjectTemplate,
+  ProjectType,
+  ScaffoldConfig,
+  ScaffoldResult
+} from './project-tools';
+export { ProjectScaffolder, createEmptyScaffoldResult } from './project-tools';
 
 // ============================================================================
 // Errors
@@ -113,10 +207,15 @@ export {
 
 export {
   KimiAuthenticationError,
+  KimiCodeValidationError,
   KimiContentFilterError,
   KimiContextLengthError,
+  KimiEnsembleTimeoutError,
+  KimiEnsembleValidationError,
   KimiError,
   KimiModelNotFoundError,
+  KimiMultiAgentError,
   KimiRateLimitError,
+  KimiScaffoldError,
   KimiValidationError
 } from './core';

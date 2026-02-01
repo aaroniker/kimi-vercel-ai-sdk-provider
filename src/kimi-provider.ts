@@ -3,6 +3,11 @@
  * @module
  */
 
+import type { ValidationResult } from './code-validation';
+import type { EnsembleConfig, GenerateFunction as EnsembleGenerateFunction, EnsembleResult } from './ensemble';
+import type { LanguageModelUsage as EnsembleUsage } from './ensemble/types';
+import type { MultiAgentConfig, MultiAgentResult } from './multi-agent';
+import type { ScaffoldConfig, ScaffoldResult } from './project-tools';
 import { type LanguageModelV3, NoSuchModelError, type ProviderV3 } from '@ai-sdk/provider';
 import {
   type FetchFunction,
@@ -12,8 +17,12 @@ import {
   withoutTrailingSlash
 } from '@ai-sdk/provider-utils';
 import { KimiChatLanguageModel, type KimiChatModelId, type KimiChatSettings } from './chat';
+import { CodeValidator } from './code-validation';
+import { MultiSampler } from './ensemble';
 import { KimiFileClient } from './files';
-import { kimiTools } from './tools';
+import { type GenerateTextFunction as WorkflowGenerateTextFunction, WorkflowRunner } from './multi-agent';
+import { ProjectScaffolder } from './project-tools';
+import { detectToolsFromPrompt, kimiTools } from './tools';
 import { VERSION } from './version';
 
 // ============================================================================
@@ -86,6 +95,115 @@ export interface KimiProviderSettings {
 // ============================================================================
 
 /**
+ * Generate function signature for ensemble and convenience methods.
+ * Takes a model and prompt and returns generation results.
+ */
+export type ProviderGenerateFunction = (
+  model: LanguageModelV3,
+  prompt: string,
+  options?: { temperature?: number }
+) => Promise<{
+  text: string;
+  reasoning?: string;
+  toolCalls?: unknown[];
+  toolResults?: unknown[];
+  usage?: EnsembleUsage;
+  finishReason?: string;
+}>;
+
+/**
+ * Options for ensemble generation.
+ */
+export interface EnsembleOptions extends Partial<EnsembleConfig> {
+  /**
+   * Model to use for generation. Defaults to 'kimi-k2.5'.
+   */
+  model?: KimiChatModelId;
+
+  /**
+   * Base temperature for generation.
+   * @default 0.7
+   */
+  baseTemperature?: number;
+}
+
+/**
+ * Options for multi-agent workflows.
+ */
+export interface MultiAgentOptions extends Partial<MultiAgentConfig> {
+  /**
+   * Default model settings to apply.
+   */
+  modelSettings?: KimiChatSettings;
+}
+
+/**
+ * Options for code validation.
+ */
+export interface ValidateCodeOptions {
+  /**
+   * Model to use for LLM-based validation. Defaults to 'kimi-k2.5'.
+   */
+  model?: KimiChatModelId;
+
+  /**
+   * Model settings to apply.
+   */
+  modelSettings?: KimiChatSettings;
+
+  /**
+   * Maximum number of attempts to fix errors.
+   * @default 3
+   */
+  maxAttempts?: number;
+
+  /**
+   * Language to validate (auto-detected if not specified).
+   * @default 'auto'
+   */
+  language?: 'javascript' | 'typescript' | 'python' | 'java' | 'cpp' | 'go' | 'rust' | 'ruby' | 'php' | 'auto';
+
+  /**
+   * Validation strictness level.
+   * @default 'strict'
+   */
+  strictness?: 'lenient' | 'strict' | 'maximum';
+
+  /**
+   * Timeout for each code execution attempt (ms).
+   * @default 30000
+   */
+  executionTimeoutMs?: number;
+
+  /**
+   * Whether to include test cases in validation.
+   * @default true
+   */
+  includeTests?: boolean;
+
+  /**
+   * Whether to return the fixed code even if validation fails.
+   * @default true
+   */
+  returnPartialFix?: boolean;
+}
+
+/**
+ * Options for project scaffolding.
+ */
+export interface ScaffoldProjectOptions extends ScaffoldConfig {
+  /**
+   * Model to use for generation. Defaults to 'kimi-k2.5'.
+   */
+  model?: KimiChatModelId;
+
+  /**
+   * Model settings to apply.
+   */
+  modelSettings?: KimiChatSettings;
+}
+
+/**
  * The Kimi provider interface.
  */
 export interface KimiProvider extends Omit<ProviderV3, 'specificationVersion'> {
@@ -132,6 +250,127 @@ export interface KimiProvider extends Omit<ProviderV3, 'specificationVersion'> {
    * ```
    */
   files: KimiFileClient;
+
+  /**
+   * Generate multiple samples and select the best one using ensemble techniques.
+   *
+   * @param prompt - The prompt to generate from
+   * @param generateFn - Function that generates text (from AI SDK)
+   * @param options - Ensemble configuration options
+   * @returns The best response based on the selection strategy
+   *
+   * @example
+   * ```ts
+   * import { generateText } from 'ai';
+   *
+   * const result = await kimi.ensemble(
+   *   'Write a function to sort an array',
+   *   async (model, prompt, opts) => {
+   *     const result = await generateText({ model, prompt, temperature: opts?.temperature });
+   *     return { text: result.text, usage: result.usage };
+   *   },
+   *   { n: 3, selectionStrategy: 'best', scoringHeuristic: 'code' }
+   * );
+   * ```
+   */
+  ensemble(prompt: string, generateFn: ProviderGenerateFunction, options?: EnsembleOptions): Promise<EnsembleResult>;
+
+  /**
+   * Run a multi-agent workflow for complex tasks.
+   *
+   * @param prompt - The task description
+   * @param generateFn - Function that generates text (from AI SDK)
+   * @param options - Multi-agent workflow configuration
+   * @returns The result of the multi-agent collaboration
+   *
+   * @example
+   * ```ts
+   * const result = await kimi.multiAgent(
+   *   'Build a REST API for user authentication',
+   *   async (modelId, prompt) => {
+   *     const result = await generateText({ model: kimi(modelId), prompt });
+   *     return { text: result.text };
+   *   },
+   *   { workflow: 'planner-executor' }
+   * );
+   * ```
+   */
+  multiAgent(
+    prompt: string,
+    generateFn: WorkflowGenerateTextFunction,
+    options?: MultiAgentOptions
+  ): Promise<MultiAgentResult>;
+
+  /**
+   * Validate code for syntax errors and common issues.
+   *
+   * @param code - The code to validate
+   * @param generateFn - Optional function for LLM-based validation
+   * @param options - Validation configuration
+   * @returns Validation result with errors and optionally fixed code
+   *
+   * @example
+   * ```ts
+   * const result = await kimi.validateCode(
+   *   'function test() { return 42 }',
+   *   async (model, prompt) => {
+   *     const result = await generateText({ model, prompt });
+   *     return { text: result.text };
+   *   },
+   *   { language: 'javascript', strictness: 'strict' }
+   * );
+   * ```
+   */
+  validateCode(
+    code: string,
+    generateFn?: (model: LanguageModelV3, prompt: string) => Promise<{ text: string }>,
+    options?: ValidateCodeOptions
+  ): Promise<ValidationResult>;
+
+  /**
+   * Generate a complete project scaffold from a description.
+   *
+   * @param description - Description of the project to create
+   * @param generateFn - Function that generates text (from AI SDK)
+   * @param options - Scaffold configuration
+   * @returns Generated project files and setup instructions
+   *
+   * @example
+   * ```ts
+   * const result = await kimi.scaffoldProject(
+   *   'A Next.js app with authentication and database',
+   *   async (prompt) => {
+   *     const result = await generateText({ model: kimi('kimi-k2.5'), prompt });
+   *     return { text: result.text };
+   *   },
+   *   { type: 'nextjs', includeTests: true, includeDocker: true }
+   * );
+   * ```
+   */
+  scaffoldProject(
+    description: string,
+    generateFn: (prompt: string) => Promise<{ text: string }>,
+    options?: ScaffoldProjectOptions
+  ): Promise<ScaffoldResult>;
+
+  /**
+   * Auto-detect which tools should be enabled based on prompt content.
+   *
+   * @param prompt - The user's prompt
+   * @returns Object with webSearch and codeInterpreter booleans
+   *
+   * @example
+   * ```ts
+   * const tools = kimi.detectTools('What is the current Bitcoin price?');
+   * // { webSearch: true, codeInterpreter: false }
+   *
+   * const model = kimi('kimi-k2.5', {
+   *   webSearch: tools.webSearch,
+   *   codeInterpreter: tools.codeInterpreter
+   * });
+   * ```
+   */
+  detectTools(prompt: string): { webSearch: boolean; codeInterpreter: boolean };
 }
 
 // ============================================================================
@@ -239,6 +478,120 @@ export function createKimi(options: KimiProviderSettings = {}): KimiProvider {
 
   provider.rerankingModel = (modelId: string) => {
     throw new NoSuchModelError({ modelId, modelType: 'rerankingModel' });
+  };
+
+  // ============================================================================
+  // Advanced Feature Methods
+  // ============================================================================
+
+  provider.ensemble = async (
+    prompt: string,
+    generateFn: ProviderGenerateFunction,
+    ensembleOptions: EnsembleOptions = {}
+  ): Promise<EnsembleResult> => {
+    const { model = 'kimi-k2.5', baseTemperature = 0.7, ...config } = ensembleOptions;
+
+    const sampler = new MultiSampler({
+      modelId: model,
+      baseTemperature
+    });
+
+    // Wrap the generate function to match the expected signature
+    const wrappedGenerateFn: EnsembleGenerateFunction = async (options) => {
+      const languageModel = createChatModel(model, {});
+      const result = await generateFn(languageModel, prompt, { temperature: options.temperature });
+      return {
+        text: result.text,
+        reasoning: result.reasoning,
+        toolCalls: result.toolCalls,
+        toolResults: result.toolResults,
+        usage: result.usage,
+        finishReason: result.finishReason ?? 'stop'
+      };
+    };
+
+    return sampler.generate(wrappedGenerateFn, {
+      n: config.n ?? 3,
+      selectionStrategy: config.selectionStrategy ?? 'best',
+      temperatureVariance: config.temperatureVariance ?? 0.1,
+      scoringHeuristic: config.scoringHeuristic ?? 'confidence',
+      customScorer: config.customScorer,
+      timeoutMs: config.timeoutMs ?? 60000,
+      allowPartialFailure: config.allowPartialFailure ?? true,
+      minSuccessfulSamples: config.minSuccessfulSamples ?? 1
+    });
+  };
+
+  provider.multiAgent = async (
+    prompt: string,
+    generateFn: WorkflowGenerateTextFunction,
+    agentOptions: MultiAgentOptions = {}
+  ): Promise<MultiAgentResult> => {
+    const { modelSettings, ...config } = agentOptions;
+
+    const runner = new WorkflowRunner(generateFn);
+
+    return runner.run(prompt, {
+      workflow: config.workflow ?? 'planner-executor',
+      modelA: config.modelA ?? 'kimi-k2.5-thinking',
+      modelB: config.modelB ?? 'kimi-k2.5',
+      iterations: config.iterations ?? 2,
+      validateCode: config.validateCode ?? false,
+      timeoutMs: config.timeoutMs ?? 120000,
+      customWorkflow: config.customWorkflow,
+      verbose: config.verbose ?? false,
+      systemPrompts: config.systemPrompts
+    });
+  };
+
+  provider.validateCode = async (
+    code: string,
+    generateFn?: (model: LanguageModelV3, prompt: string) => Promise<{ text: string }>,
+    validateOptions: ValidateCodeOptions = {}
+  ): Promise<ValidationResult> => {
+    const { model = 'kimi-k2.5', modelSettings, ...config } = validateOptions;
+
+    // Create generate function that uses our model if LLM validation is needed
+    const languageModel = createChatModel(model, modelSettings);
+    const llmGenerateFn = generateFn
+      ? async (prompt: string) => generateFn(languageModel, prompt)
+      : async (_prompt: string) => {
+          return { text: '' };
+        }; // Fallback for static-only validation
+
+    const validator = new CodeValidator({
+      generateText: llmGenerateFn
+    });
+
+    return validator.validate(code, {
+      enabled: true,
+      maxAttempts: config.maxAttempts ?? 3,
+      language: config.language ?? 'auto',
+      strictness: config.strictness ?? 'strict',
+      executionTimeoutMs: config.executionTimeoutMs ?? 30000,
+      includeTests: config.includeTests ?? true,
+      returnPartialFix: config.returnPartialFix ?? true
+    });
+  };
+
+  provider.scaffoldProject = async (
+    description: string,
+    generateFn: (prompt: string) => Promise<{ text: string }>,
+    scaffoldOptions: ScaffoldProjectOptions = {}
+  ): Promise<ScaffoldResult> => {
+    const scaffolder = new ProjectScaffolder({
+      generateText: generateFn
+    });
+
+    return scaffolder.scaffold(description, scaffoldOptions);
+  };
+
+  provider.detectTools = (prompt: string): { webSearch: boolean; codeInterpreter: boolean } => {
+    const result = detectToolsFromPrompt(prompt);
+    return {
+      webSearch: result.webSearch,
+      codeInterpreter: result.codeInterpreter
+    };
   };
 
   return provider;

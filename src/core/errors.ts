@@ -138,3 +138,94 @@ export class KimiContextLengthError extends KimiError {
     this.name = 'KimiContextLengthError';
   }
 }
+
+// ============================================================================
+// Ensemble Errors
+// ============================================================================
+
+/**
+ * Error thrown when ensemble configuration is invalid.
+ */
+export class KimiEnsembleValidationError extends KimiError {
+  readonly config: unknown;
+  readonly modelId: string;
+
+  constructor(message: string, config: unknown, modelId: string) {
+    super(message, 'ensemble_validation_error', 400);
+    this.name = 'KimiEnsembleValidationError';
+    this.config = config;
+    this.modelId = modelId;
+  }
+}
+
+/**
+ * Error thrown when ensemble generation times out.
+ */
+export class KimiEnsembleTimeoutError extends KimiError {
+  readonly completedSamples: number;
+  readonly requestedSamples: number;
+
+  constructor(message: string, completedSamples: number, requestedSamples: number) {
+    super(message, 'ensemble_timeout', 408);
+    this.name = 'KimiEnsembleTimeoutError';
+    this.completedSamples = completedSamples;
+    this.requestedSamples = requestedSamples;
+  }
+}
+
+// ============================================================================
+// Multi-Agent Errors
+// ============================================================================
+
+/**
+ * Error thrown when a multi-agent workflow fails.
+ */
+export class KimiMultiAgentError extends KimiError {
+  readonly workflow: string;
+  readonly step: number;
+  readonly stepError?: Error;
+
+  constructor(message: string, workflow: string, step: number, stepError?: Error) {
+    super(message, 'multi_agent_error', 500);
+    this.name = 'KimiMultiAgentError';
+    this.workflow = workflow;
+    this.step = step;
+    this.stepError = stepError;
+  }
+}
+
+// ============================================================================
+// Code Validation Errors
+// ============================================================================
+
+/**
+ * Error thrown when code validation fails.
+ */
+export class KimiCodeValidationError extends KimiError {
+  readonly validationErrors: string[];
+  readonly attempts: number;
+
+  constructor(message: string, validationErrors: string[], attempts: number) {
+    super(message, 'code_validation_error', 400);
+    this.name = 'KimiCodeValidationError';
+    this.validationErrors = validationErrors;
+    this.attempts = attempts;
+  }
+}
+
+// ============================================================================
+// Project Scaffolding Errors
+// ============================================================================
+
+/**
+ * Error thrown when project scaffolding fails.
+ */
+export class KimiScaffoldError extends KimiError {
+  readonly projectType?: string;
+
+  constructor(message: string, projectType?: string) {
+    super(message, 'scaffold_error', 500);
+    this.name = 'KimiScaffoldError';
+    this.projectType = projectType;
+  }
+}

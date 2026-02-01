@@ -33,6 +33,11 @@ This is a native implementation with full support for Kimi-specific features, no
 - [Video Input](#video-input-k25-models)
 - [Model Capabilities](#model-capabilities)
 - [Advanced Features](#advanced-features)
+  - [Auto-Detect Tools](#auto-detect-tools)
+  - [Ensemble Generation](#ensemble-generation-multi-sampling)
+  - [Code Validation](#code-validation)
+  - [Multi-Agent Collaboration](#multi-agent-collaboration)
+  - [Project Scaffolding](#project-scaffolding)
   - [Temperature Locking](#temperature-locking-for-thinking-models)
   - [File Content Caching](#file-content-caching)
   - [Schema Sanitization](#schema-sanitization)
@@ -611,6 +616,331 @@ const codeCaps = inferKimiCodeCapabilities('kimi-k2-thinking');
 
 ## Advanced Features
 
+### Auto-Detect Tools
+
+Automatically detect which built-in tools should be enabled based on prompt content:
+
+```ts
+import { kimi, detectToolsFromPrompt, shouldAutoEnableTools } from 'kimi-vercel-ai-sdk-provider';
+
+// Simple detection
+const tools = kimi.detectTools('What is the current Bitcoin price?');
+// { webSearch: true, codeInterpreter: false }
+
+// Use with model settings
+const model = kimi('kimi-k2.5', {
+  webSearch: tools.webSearch,
+  codeInterpreter: tools.codeInterpreter
+});
+
+// Or use the standalone function with more details
+const result = detectToolsFromPrompt('Calculate the factorial of 20');
+// {
+//   webSearch: false,
+//   codeInterpreter: true,
+//   webSearchConfidence: 0,
+//   codeInterpreterConfidence: 0.9,
+//   webSearchMatches: [],
+//   codeInterpreterMatches: ['calculate']
+// }
+
+// Check for opt-outs
+import { hasToolOptOut } from 'kimi-vercel-ai-sdk-provider';
+const optOut = hasToolOptOut("Don't search the web, just answer from memory");
+// { webSearch: true, codeInterpreter: false }
+```
+
+### Ensemble Generation (Multi-Sampling)
+
+Generate multiple responses and select the best one using various strategies:
+
+```ts
+import { kimi, MultiSampler } from 'kimi-vercel-ai-sdk-provider';
+import { generateText } from 'ai';
+
+// Using the provider convenience method
+const result = await kimi.ensemble(
+  'Write a function to merge two sorted arrays',
+  async (model, prompt, options) => {
+    const result = await generateText({
+      model,
+      prompt,
+      temperature: options?.temperature
+    });
+    return { text: result.text, usage: result.usage };
+  },
+  {
+    n: 3,                          // Generate 3 samples
+    selectionStrategy: 'best',     // 'first' | 'vote' | 'best' | 'all'
+    scoringHeuristic: 'code',      // 'length' | 'confidence' | 'code' | 'custom'
+    temperatureVariance: 0.1,      // Add variance for diversity
+    model: 'kimi-k2.5',
+  }
+);
+
+console.log(result.text);           // Best response
+console.log(result.metadata);       // { nRequested: 3, nCompleted: 3, winningIndex: 1, ... }
+console.log(result.alternatives);   // All responses (when strategy is 'all')
+
+// Or use MultiSampler directly for more control
+const sampler = new MultiSampler({
+  generateFn: async (model, prompt, options) => {
+    const result = await generateText({ model, prompt, temperature: options?.temperature });
+    return { text: result.text };
+  },
+  modelId: 'kimi-k2.5'
+});
+
+const ensembleResult = await sampler.generate(
+  kimi('kimi-k2.5'),
+  'Explain quantum computing',
+  {
+    n: 5,
+    selectionStrategy: 'vote',     // Majority voting
+    timeoutMs: 30000,
+    allowPartialFailure: true,
+    minSuccessfulSamples: 2
+  }
+);
+
+// Custom scoring function
+const customResult = await sampler.generate(
+  kimi('kimi-k2.5'),
+  'Write clean code',
+  {
+    n: 3,
+    selectionStrategy: 'best',
+    scoringHeuristic: 'custom',
+    customScorer: (response) => {
+      // Higher score = better
+      let score = 0;
+      if (response.text.includes('```')) score += 10;
+      if (response.text.length > 500) score += 5;
+      if (!response.text.includes('TODO')) score += 3;
+      return score;
+    }
+  }
+);
+```
+
+### Code Validation
+
+Validate generated code for syntax errors and common issues:
+
+```ts
+import { kimi, CodeValidator, detectLanguage, extractCodeBlocks } from 'kimi-vercel-ai-sdk-provider';
+import { generateText } from 'ai';
+
+// Using the provider convenience method
+const result = await kimi.validateCode(
+  `function add(a, b) {
+    return a + b
+  }`,
+  async (model, prompt) => {
+    const result = await generateText({ model, prompt });
+    return { text: result.text };
+  },
+  {
+    language: 'javascript',
+    strictness: 'normal',  // 'lenient' | 'normal' | 'strict'
+    autoFix: true,
+    maxAttempts: 3
+  }
+);
+
+console.log(result.valid);      // true/false
+console.log(result.errors);     // Array of validation errors
+console.log(result.fixedCode);  // Auto-fixed code (if autoFix enabled)
+
+// Language detection
+const langResult = detectLanguage(`
+  def hello():
+    print("Hello, World!")
+`);
+// { language: 'python', confidence: 0.9, indicators: ['def', 'print'] }
+
+// Extract code blocks from markdown
+const blocks = extractCodeBlocks(`
+Here's the code:
+
+\`\`\`typescript
+const x: number = 42;
+\`\`\`
+`);
+// { blocks: [{ code: 'const x: number = 42;', language: 'typescript', ... }], hasCode: true }
+
+// Direct validator usage
+const validator = new CodeValidator({
+  generateText: async (prompt) => {
+    const result = await generateText({ model: kimi('kimi-k2.5'), prompt });
+    return { text: result.text };
+  }
+});
+
+const validation = await validator.validate(code, {
+  language: 'typescript',
+  strictness: 'strict',
+  autoFix: true,
+  validateWithLLM: true,  // Use LLM for semantic validation
+  maxAttempts: 2
+});
+```
+
+### Multi-Agent Collaboration
+
+Use multiple agents working together for complex tasks:
+
+```ts
+import { kimi, WorkflowRunner, DEFAULT_SYSTEM_PROMPTS } from 'kimi-vercel-ai-sdk-provider';
+import { generateText } from 'ai';
+
+// Using the provider convenience method
+const result = await kimi.multiAgent(
+  'Build a REST API for user authentication with JWT',
+  async (modelId, prompt, systemPrompt) => {
+    const result = await generateText({
+      model: kimi(modelId),
+      prompt,
+      system: systemPrompt
+    });
+    return { text: result.text, reasoning: result.reasoning };
+  },
+  {
+    workflow: 'planner-executor',  // 'planner-executor' | 'proposer-critic' | 'debate' | 'custom'
+    modelA: 'kimi-k2.5-thinking',  // Planning/thinking agent
+    modelB: 'kimi-k2.5',           // Execution agent
+    iterations: 2,
+    validateCode: true,
+    verbose: true
+  }
+);
+
+console.log(result.text);               // Final output
+console.log(result.reasoning);          // Planning/reasoning output
+console.log(result.intermediateSteps);  // All steps in the workflow
+console.log(result.metadata);           // { workflow: 'planner-executor', iterations: 2, ... }
+
+// Different workflow types:
+
+// 1. Planner-Executor: One agent plans, another implements
+const plannerExecutor = await kimi.multiAgent(prompt, generateFn, {
+  workflow: 'planner-executor'
+});
+
+// 2. Proposer-Critic: Iterative refinement with feedback
+const proposerCritic = await kimi.multiAgent(prompt, generateFn, {
+  workflow: 'proposer-critic',
+  iterations: 3  // Number of refinement cycles
+});
+
+// 3. Debate: Multiple perspectives converge on answer
+const debate = await kimi.multiAgent(prompt, generateFn, {
+  workflow: 'debate'
+});
+
+// 4. Custom workflow
+const custom = await kimi.multiAgent(prompt, generateFn, {
+  workflow: 'custom',
+  customWorkflow: async (prompt, context) => {
+    // Step 1: Research
+    const research = await context.generateWithModelA(
+      `Research: ${prompt}`
+    );
+    context.addStep({ agent: 'A', role: 'custom', action: 'research', output: research.text });
+
+    // Step 2: Implement
+    const implementation = await context.generateWithModelB(
+      `Based on research:\n${research.text}\n\nImplement: ${prompt}`
+    );
+    context.addStep({ agent: 'B', role: 'custom', action: 'implement', output: implementation.text });
+
+    return {
+      text: implementation.text,
+      reasoning: research.text,
+      intermediateSteps: [],  // Filled by context
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      metadata: { workflow: 'custom', iterations: 2, durationMs: 0, models: [], validationEnabled: false, success: true }
+    };
+  }
+});
+
+// Custom system prompts
+const withCustomPrompts = await kimi.multiAgent(prompt, generateFn, {
+  workflow: 'proposer-critic',
+  systemPrompts: {
+    proposer: 'You are a senior software architect. Propose clean, maintainable solutions.',
+    critic: 'You are a security expert. Review for vulnerabilities and suggest improvements.'
+  }
+});
+```
+
+### Project Scaffolding
+
+Generate complete project structures from descriptions:
+
+```ts
+import { kimi, ProjectScaffolder } from 'kimi-vercel-ai-sdk-provider';
+import { generateText } from 'ai';
+
+// Using the provider convenience method
+const result = await kimi.scaffoldProject(
+  'A Next.js app with authentication, database, and API routes',
+  async (prompt) => {
+    const result = await generateText({ model: kimi('kimi-k2.5'), prompt });
+    return { text: result.text };
+  },
+  {
+    type: 'nextjs',         // 'auto' | 'nextjs' | 'react' | 'vue' | 'node' | 'express' | 'fastify' | 'python' | 'fastapi' | 'flask' | 'go' | 'rust'
+    includeTests: true,     // Include test files
+    includeCI: true,        // Include GitHub Actions
+    includeDocs: true,      // Include README
+    includeDocker: true,    // Include Dockerfile
+    includeLinting: true,   // Include ESLint config
+    useTypeScript: true,
+    features: ['auth', 'database', 'api'],
+    outputFormat: 'files'   // 'files' | 'instructions' | 'json'
+  }
+);
+
+console.log(result.files);          // Array of { path, content, description }
+console.log(result.instructions);   // Setup instructions markdown
+console.log(result.setupCommands);  // ['npm install', 'npm run dev', ...]
+console.log(result.metadata);       // { projectType, projectName, fileCount, ... }
+
+// Write files to disk
+import { writeFile, mkdir } from 'fs/promises';
+import { dirname, join } from 'path';
+
+for (const file of result.files) {
+  const filePath = join('./my-project', file.path);
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, file.content);
+}
+
+// Or use the scaffolder directly
+const scaffolder = new ProjectScaffolder({
+  generateText: async (prompt) => {
+    const result = await generateText({ model: kimi('kimi-k2.5'), prompt });
+    return { text: result.text };
+  }
+});
+
+const project = await scaffolder.scaffold(
+  'A REST API with Express and MongoDB',
+  {
+    type: 'express',
+    includeTests: true,
+    customTemplate: `
+      Must include:
+      - JWT authentication middleware
+      - Request validation with Zod
+      - Error handling middleware
+      - Rate limiting
+    `
+  }
+);
+```
+
 ### Temperature Locking for Thinking Models
 
 Thinking models like `kimi-k2.5-thinking` require a fixed temperature of `1.0` for optimal reasoning. The provider automatically enforces this:
@@ -888,8 +1218,11 @@ import {
   KimiProviderOptions,
   KimiModelCapabilities,
   KimiCachingConfig,
-} from 'kimi-vercel-ai-sdk-provider
-';
+  EnsembleOptions,
+  MultiAgentOptions,
+  ValidateCodeOptions,
+  ScaffoldProjectOptions,
+} from 'kimi-vercel-ai-sdk-provider';
 
 // Kimi Code Provider
 import {
@@ -898,16 +1231,10 @@ import {
   KimiCodeLanguageModel,
   inferKimiCodeCapabilities,
   kimiCodeProviderOptionsSchema,
-  toAnthropicThinking,
   // Constants
   KIMI_CODE_BASE_URL,
-  KIMI_CODE_OPENAI_BASE_URL,
   KIMI_CODE_DEFAULT_MODEL,
   KIMI_CODE_THINKING_MODEL,
-  KIMI_CODE_MODELS,
-  KIMI_CODE_DEFAULT_MAX_TOKENS,
-  KIMI_CODE_DEFAULT_CONTEXT_WINDOW,
-  KIMI_CODE_ANTHROPIC_VERSION,
   // Types
   KimiCodeProvider,
   KimiCodeProviderSettings,
@@ -922,12 +1249,6 @@ import {
 import {
   KimiFileClient,
   processAttachments,
-  FileCache,
-  generateContentHash,
-  generateCacheKey,
-  getDefaultFileCache,
-  setDefaultFileCache,
-  clearDefaultFileCache,
   SUPPORTED_FILE_EXTENSIONS,
   SUPPORTED_MIME_TYPES,
   isImageMediaType,
@@ -943,20 +1264,87 @@ import {
   FileUploadResult,
   Attachment,
   ProcessedAttachment,
-  FileCacheOptions,
-  FileCacheEntry,
 } from 'kimi-vercel-ai-sdk-provider';
 
-// Utilities
+// Auto-Detect Tools
 import {
-  analyzeReasoningPreservation,
-  recommendThinkingModel,
-  // Constants
-  THINKING_MODEL_TEMPERATURE,
-  THINKING_MODEL_DEFAULT_MAX_TOKENS,
-  STANDARD_MODEL_DEFAULT_MAX_TOKENS,
+  detectToolsFromPrompt,
+  shouldAutoEnableTools,
+  hasToolOptOut,
+  generateToolGuidanceMessage,
   // Types
-  ReasoningAnalysis,
+  AutoDetectToolsResult,
+  AutoDetectConfig,
+  ToolGuidanceOptions,
+} from 'kimi-vercel-ai-sdk-provider';
+
+// Ensemble / Multi-Sampling
+import {
+  MultiSampler,
+  createSingletonEnsembleResult,
+  // Types
+  EnsembleConfig,
+  EnsembleResult,
+  EnsembleResponse,
+  EnsembleMetadata,
+  SelectionStrategy,
+  ScoringHeuristic,
+  GenerateFunction,
+  MultiSamplerOptions,
+} from 'kimi-vercel-ai-sdk-provider';
+
+// Code Validation
+import {
+  CodeValidator,
+  detectLanguage,
+  extractCodeBlocks,
+  extractPrimaryCode,
+  containsCode,
+  getFileExtension,
+  createPassedValidationResult,
+  createFailedValidationResult,
+  // Types
+  CodeValidationConfig,
+  ValidationResult,
+  ValidationError,
+  ValidationErrorType,
+  ValidationSeverity,
+  ValidationStrictness,
+  SupportedLanguage,
+  LanguageDetectionResult,
+  CodeBlock,
+  CodeExtractionResult,
+  CodeValidatorOptions,
+  FixAttempt,
+} from 'kimi-vercel-ai-sdk-provider';
+
+// Multi-Agent Collaboration
+import {
+  WorkflowRunner,
+  createEmptyMultiAgentResult,
+  DEFAULT_SYSTEM_PROMPTS,
+  // Types
+  MultiAgentConfig,
+  MultiAgentResult,
+  MultiAgentMetadata,
+  AgentStep,
+  WorkflowContext,
+  WorkflowType,
+  GenerateResult,
+} from 'kimi-vercel-ai-sdk-provider';
+
+// Project Scaffolding
+import {
+  ProjectScaffolder,
+  createEmptyScaffoldResult,
+  // Types
+  ScaffoldConfig,
+  ScaffoldResult,
+  ProjectFile,
+  ProjectMetadata,
+  ProjectType,
+  ProjectTemplate,
+  OutputFormat,
 } from 'kimi-vercel-ai-sdk-provider';
 
 // Built-in Tools
@@ -966,8 +1354,13 @@ import {
   createCodeInterpreterTool,
   KIMI_WEB_SEARCH_TOOL_NAME,
   KIMI_CODE_INTERPRETER_TOOL_NAME,
-} from 'kimi-vercel-ai-sdk-provider
-';
+  // Types
+  KimiBuiltinTool,
+  KimiWebSearchConfig,
+  KimiWebSearchToolOptions,
+  KimiCodeInterpreterConfig,
+  KimiCodeInterpreterToolOptions,
+} from 'kimi-vercel-ai-sdk-provider';
 
 // Errors
 import {
@@ -978,8 +1371,12 @@ import {
   KimiContextLengthError,
   KimiContentFilterError,
   KimiModelNotFoundError,
-} from 'kimi-vercel-ai-sdk-provider
-';
+  KimiEnsembleValidationError,
+  KimiEnsembleTimeoutError,
+  KimiMultiAgentError,
+  KimiCodeValidationError,
+  KimiScaffoldError,
+} from 'kimi-vercel-ai-sdk-provider';
 ```
 
 ### Feature Comparison

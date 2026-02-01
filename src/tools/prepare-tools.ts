@@ -257,17 +257,106 @@ export function prepareKimiTools({
 // ============================================================================
 
 /**
+ * Tool descriptions for better guidance.
+ */
+const TOOL_DESCRIPTIONS: Record<string, string> = {
+  $web_search:
+    'Search the web for up-to-date information, current events, facts, news, prices, weather, or any data not available in your training',
+  $code: 'Execute code to perform calculations, data processing, algorithmic tasks, or verify code correctness'
+};
+
+/**
+ * Options for generating tool guidance messages.
+ */
+export interface ToolGuidanceOptions {
+  /**
+   * The tool names available.
+   */
+  toolNames: string[];
+
+  /**
+   * The type of tool choice.
+   */
+  choiceType: 'required' | 'tool';
+
+  /**
+   * The specific tool name if choiceType is 'tool'.
+   */
+  targetTool?: string;
+
+  /**
+   * Optional context from the user's prompt to include.
+   */
+  promptContext?: string;
+
+  /**
+   * Whether to include detailed tool descriptions.
+   * @default true
+   */
+  includeDescriptions?: boolean;
+}
+
+/**
+ * Generate a comprehensive tool guidance message.
+ *
+ * @param options - Options for generating the message
+ * @returns The generated system message
+ */
+export function generateToolGuidanceMessage(options: ToolGuidanceOptions): string {
+  const { toolNames, choiceType, targetTool, promptContext, includeDescriptions = true } = options;
+
+  const lines: string[] = ['=== TOOL USAGE GUIDANCE ===', ''];
+
+  // Add tool descriptions
+  if (includeDescriptions && toolNames.length > 0) {
+    lines.push('Available tools:');
+    for (const toolName of toolNames) {
+      const description = TOOL_DESCRIPTIONS[toolName] || 'Execute this tool';
+      lines.push(`- ${toolName}: ${description}`);
+    }
+    lines.push('');
+  }
+
+  // Add the requirement
+  if (choiceType === 'required') {
+    lines.push('⚠️ IMPORTANT: You MUST use at least one of the available tools to respond.');
+    lines.push('Do NOT provide a direct text response without first calling a tool.');
+  } else if (choiceType === 'tool' && targetTool) {
+    lines.push(`⚠️ IMPORTANT: You MUST use the "${targetTool}" tool to respond.`);
+    lines.push('Do NOT use any other tool or provide a direct text response.');
+  }
+
+  // Add context-specific guidance
+  if (promptContext) {
+    lines.push('');
+    lines.push(`Task context: ${promptContext.slice(0, 200)}${promptContext.length > 200 ? '...' : ''}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Generate a system message to force the model to use a tool.
  */
 function generateRequiredToolMessage(toolNames: string): string {
-  return `IMPORTANT INSTRUCTION: You MUST use one of the available tools (${toolNames}) to respond to the user's request. Do NOT provide a direct text response without first calling a tool. Always invoke a tool to complete this task.`;
+  const tools = toolNames.split(', ');
+  return generateToolGuidanceMessage({
+    toolNames: tools,
+    choiceType: 'required',
+    includeDescriptions: true
+  });
 }
 
 /**
  * Generate a system message to force the model to use a specific tool.
  */
 function generateSpecificToolMessage(toolName: string): string {
-  return `IMPORTANT INSTRUCTION: You MUST use the "${toolName}" tool to respond to this request. Do NOT use any other tool or provide a direct text response. Call the "${toolName}" tool with appropriate parameters.`;
+  return generateToolGuidanceMessage({
+    toolNames: [toolName],
+    choiceType: 'tool',
+    targetTool: toolName,
+    includeDescriptions: true
+  });
 }
 
 // ============================================================================
