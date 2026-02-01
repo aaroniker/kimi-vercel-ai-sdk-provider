@@ -1,8 +1,44 @@
 # ai-sdk-provider-kimi
 
-Native Kimi (Moonshot AI) provider for Vercel AI SDK v6.
+Native Kimi (Moonshot AI) provider for Vercel AI SDK.
 
 This is a native implementation with full support for Kimi-specific features, not a generic OpenAI-compatible wrapper.
+
+[![npm version](https://img.shields.io/npm/v/ai-sdk-provider-kimi.svg?style=flat-square)](https://www.npmjs.com/package/ai-sdk-provider-kimi) 
+[![npm bundle size](https://img.shields.io/bundlephobia/minzip/ai-sdk-provider-kimi?style=flat-square&label=bundle%20size)](https://bundlephobia.com/package/ai-sdk-provider-kimi)
+[![npm downloads](https://img.shields.io/npm/dm/ai-sdk-provider-kimi.svg?style=flat-square)](https://www.npmjs.com/package/ai-sdk-provider-kimi)
+[![license](https://img.shields.io/npm/l/ai-sdk-provider-kimi.svg?style=flat-square)](https://github.com/aaroniker/ai-sdk-provider-kimi/blob/main/LICENSE)
+
+## Table of Contents
+
+- [Features](#features)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Kimi Code](#kimi-code)
+  - [Available Models](#available-models)
+  - [Extended Thinking](#extended-thinking)
+  - [Streaming with Thinking Blocks](#streaming-with-thinking-blocks)
+- [Built-in Tools](#built-in-tools-kimi-chat)
+  - [Web Search](#web-search-web_search)
+  - [Code Interpreter](#code-interpreter-code)
+  - [Provider Tool Helpers](#provider-tool-helpers)
+- [Native File & PDF Support](#native-file--pdf-support)
+  - [File Client](#file-client-simple)
+  - [Attachment Processing](#attachment-processing)
+  - [Supported File Types](#supported-file-types)
+- [Tool Choice Polyfill](#tool-choice-polyfill)
+- [Context Caching](#context-caching)
+- [Token Tracking](#token-tracking)
+- [Reasoning/Thinking Models](#reasoningthinking-models)
+- [Video Input](#video-input-k25-models)
+- [Model Capabilities](#model-capabilities)
+- [Provider Options](#provider-options)
+- [Available Models](#available-models-1)
+- [Regional Endpoints](#regional-endpoints)
+- [Environment Variables](#environment-variables)
+- [Why Native vs OpenAI-Compatible?](#why-native-vs-openai-compatible)
+- [API Reference](#api-reference)
+- [License](#license)
 
 ## Features
 
@@ -333,11 +369,8 @@ const result = await client.uploadAndExtract({
 Process experimental_attachments automatically:
 
 ```ts
-import { createKimi, processAttachments } from 'ai-sdk-provider-kimi';
+import { processAttachments } from 'ai-sdk-provider-kimi';
 
-const kimi = createKimi();
-
-// Use the provider's file client config
 const processed = await processAttachments({
   attachments: message.experimental_attachments ?? [],
   clientConfig: {
@@ -800,3 +833,21 @@ import {
 ## License
 
 Apache-2.0
+
+## Authors
+
+<p><strong>Aaron Iker</strong></p>
+<p valign="center">
+  <a href="https://x.com/aaroniker">
+    <img valign="top" src="https://img.shields.io/badge/X-@aaroniker-black?style=flat-square&logo=x" alt="X">
+  </a>
+  <span valign="center">&nbsp; • &nbsp;</span>
+  <a href="https://github.com/aaroniker">
+    <img valign="top" src="https://img.shields.io/badge/GitHub-aaroniker-black?style=flat-square&logo=github" alt="GitHub">
+  </a>
+  <span valign="center">&nbsp; • &nbsp;</span>
+  <a href="https://www.linkedin.com/in/aaron-iker-15606897/">
+    <img valign="top" src="https://img.shields.io/badge/LinkedIn-aaroniker-blue?style=flat-square&logo=linkedin" alt="LinkedIn">
+  </a>
+</p>
+
