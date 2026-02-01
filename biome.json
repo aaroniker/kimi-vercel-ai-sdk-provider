@@ -108,15 +108,13 @@
   },
   "files": {
     "includes": [
-      "packages/**/src/**",
-      "apps/**/src/**",
-      "packages/**/src/*",
-      "apps/**/src/*",
-      "!node_modules",
-      "!build",
-      "!coverage",
-      "!dist",
-      "!styled-system"
+      "src/**/*.ts",
+      "examples/**/*.ts"
     ]
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
   }
 }

@@ -9,7 +9,8 @@
   "files": [
     "dist/**/*",
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",
@@ -55,10 +56,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel/ai.git"
+    "url": "git+https://github.com/aaroniker/ai-sdk-provider-kimi.git"
   },
   "homepage": "https://ai-sdk.dev/providers/community-providers/custom-providers",
   "bugs": {
-    "url": "https://github.com/vercel/ai/issues"
+    "url": "https://github.com/aaroniker/ai-sdk-provider-kimi/issues"
   }
 }
